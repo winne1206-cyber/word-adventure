@@ -64,6 +64,10 @@ function isDataUrl(value) {
   return typeof value === "string" && value.startsWith("data:");
 }
 
+function shouldStripDataUrl(value) {
+  return isDataUrl(value) && value.length > 450000;
+}
+
 function compactAccessoryImagesForLocalStorage(state) {
   const next = cloneState(state);
   const compactList = (items) => {
@@ -73,7 +77,7 @@ function compactAccessoryImagesForLocalStorage(state) {
         if (!item || typeof item !== "object") return item;
         const compact = { ...item };
         ["wearableSrc", "wearImage", "image", "iconSrc", "iconImage"].forEach((field) => {
-          if (isDataUrl(compact[field])) compact[field] = "";
+          if (shouldStripDataUrl(compact[field])) compact[field] = "";
         });
         return compact;
       })

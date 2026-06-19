@@ -1180,6 +1180,7 @@ const ASSET_VERSION = "word-assets-20260618-custom-accessories";
 const FIREBASE_STORAGE_VERSION = "12.15.0";
 const FIREBASE_STORAGE_URL = `https://www.gstatic.com/firebasejs/${FIREBASE_STORAGE_VERSION}/firebase-storage.js`;
 const ACCESSORY_UPLOAD_TIMEOUT_MS = 45000;
+const ACCESSORY_INLINE_IMAGE_LIMIT = 420000;
 const ACCESSORY_SLOT_LABELS = {
   all: "全部",
   headTop: "頭頂",
@@ -3138,9 +3139,16 @@ async function uploadAccessoryImage(file, itemId, role, maxEdge, onStatus) {
       role: safeRole
     }
   });
-  await waitForUploadTask(uploadTask, roleLabel, onStatus);
-  onStatus?.(`正在取得${roleLabel}網址...`);
-  return storage.getDownloadURL(imageRef);
+  try {
+    await waitForUploadTask(uploadTask, roleLabel, onStatus);
+    onStatus?.(`正在取得${roleLabel}網址...`);
+    return await storage.getDownloadURL(imageRef);
+  } catch (error) {
+    console.warn("Word Adventure Storage upload fallback:", error);
+    onStatus?.(`${roleLabel}雲端圖片庫暫時無回應，改用壓縮備援儲存...`);
+    const fallbackBlob = await imageFileToBlob(file, role === "icon" ? 260 : 420, 0.62);
+    return imageBlobToInlineDataUrl(fallbackBlob, roleLabel);
+  }
 }
 
 function waitForUploadTask(uploadTask, roleLabel, onStatus) {
@@ -3190,7 +3198,27 @@ function friendlyUploadError(error) {
   return error?.message || String(error);
 }
 
-function imageFileToBlob(file, maxEdge = 900) {
+function imageBlobToInlineDataUrl(blob, roleLabel) {
+  return new Promise((resolve, reject) => {
+    if (!blob) {
+      reject(new Error(`${roleLabel}壓縮失敗，請換一張圖片試試看`));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`${roleLabel}備援儲存失敗，請換小一點的圖片`));
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      if (dataUrl.length > ACCESSORY_INLINE_IMAGE_LIMIT) {
+        reject(new Error(`${roleLabel}壓縮後仍太大，請先裁切或換小一點的圖片`));
+        return;
+      }
+      resolve(dataUrl);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+function imageFileToBlob(file, maxEdge = 900, quality = 0.72) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("無法讀取圖片檔案"));
@@ -3213,7 +3241,7 @@ function imageFileToBlob(file, maxEdge = 900) {
             return;
           }
           resolve(blob);
-        }, "image/webp", 0.72);
+        }, "image/webp", quality);
       };
       image.src = reader.result;
     };
