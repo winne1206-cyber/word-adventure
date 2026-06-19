@@ -3122,12 +3122,15 @@ function updateAccessoryAdminPreview() {
 async function uploadAccessoryImage(file, itemId, role, maxEdge, onStatus) {
   if (!file) return "";
   const roleLabel = role === "icon" ? "顯示圖" : "佩戴圖";
-  if (file.size <= ACCESSORY_INLINE_FILE_SIZE_LIMIT) {
-    onStatus?.(`${roleLabel}檔案很小，直接壓縮儲存...`);
-    const inlineBlob = await imageFileToBlob(file, role === "icon" ? 260 : 420, 0.72);
-    return imageBlobToInlineDataUrl(inlineBlob, roleLabel);
-  }
+  onStatus?.(`正在壓縮${roleLabel}...`);
+  const inlineBlob = await imageFileToBlob(file, role === "icon" ? 260 : 420, 0.72);
+  onStatus?.(`正在儲存${roleLabel}...`);
+  return imageBlobToInlineDataUrl(inlineBlob, roleLabel);
+}
 
+async function uploadAccessoryImageToStorage(file, itemId, role, maxEdge, onStatus) {
+  if (!file) return "";
+  const roleLabel = role === "icon" ? "顯示圖" : "佩戴圖";
   onStatus?.(`正在壓縮${roleLabel}...`);
   const firebase = await import("./firebase.js");
   const storage = await import(FIREBASE_STORAGE_URL);

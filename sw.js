@@ -1,4 +1,4 @@
-const CACHE_NAME = "word-adventure-v20260620-small-image-inline-v1";
+const CACHE_NAME = "word-adventure-v20260620-no-storage-accessory-v1";
 const APP_SHELL = [
   "./",
   "./index.html",
