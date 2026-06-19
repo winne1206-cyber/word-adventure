@@ -1466,7 +1466,7 @@ function normalizeChildProgress(childProgress, child, sharedLibrary = defaultAcc
 function normalizeCustomAccessories(items) {
   if (!Array.isArray(items)) return [];
   return items.map((item) => normalizeAccessoryItem(item, { source: "customAccessory", className: "wear-custom" }))
-    .filter((item) => item.wearableSrc);
+    .filter((item) => item.id && item.id !== "none");
 }
 
 function inferAccessorySlot(item) {
@@ -2580,10 +2580,9 @@ function renderHome() {
 
   activeWordData().forEach((category) => {
     const learnedIds = new Set(currentProgress().learnedWordIds || []);
-    const masteredIds = new Set(currentProgress().masteredWordIds || []);
     const claimedIds = new Set(currentProgress().claimedStageRewardIds || []);
     const learnedCountForCategory = category.words.filter((word) => learnedIds.has(getWordId(word, category.id))).length;
-    const masteredCountForCategory = category.words.filter((word) => masteredIds.has(getWordId(word, category.id))).length;
+    const masteredCountForCategory = category.words.filter((word) => isWordMasteredForCurrentProfile(getWordId(word, category.id))).length;
     const total = category.words.length;
     const isUnlocked = isStageUnlocked(category);
     const canClaim = isUnlocked && total > 0 && learnedCountForCategory === total && masteredCountForCategory === total && !claimedIds.has(category.id);
@@ -4015,12 +4014,7 @@ function updateCompletedStages(categoryId) {
   const category = activeWordData().find((item) => item.id === categoryId);
   if (!category) return;
 
-  const learnedIds = new Set(profile.learnedWordIds || []);
-  const masteredIds = new Set(profile.masteredWordIds || []);
-  const isComplete = category.words.length > 0 && category.words.every((word) => {
-    const wordId = getWordId(word, categoryId);
-    return learnedIds.has(wordId) && masteredIds.has(wordId);
-  });
+  const isComplete = isCategoryMastered(category);
 
   profile.completedStageIds = profile.completedStageIds || [];
   if (isComplete && !profile.completedStageIds.includes(categoryId)) {
@@ -4044,10 +4038,9 @@ function isStageUnlocked(category) {
 function isCategoryMastered(category) {
   const profile = currentProgress();
   const learnedIds = new Set(profile.learnedWordIds || []);
-  const masteredIds = new Set(profile.masteredWordIds || []);
   return category.words.length > 0 && category.words.every((word) => {
     const wordId = getWordId(word, category.id);
-    return learnedIds.has(wordId) && masteredIds.has(wordId);
+    return learnedIds.has(wordId) && isWordMasteredForCurrentProfile(wordId);
   });
 }
 
@@ -4267,6 +4260,12 @@ function isWordMasteredInAllModes(wordId) {
   const requiredModes = currentProfile().quizModes || [];
   const passedModes = currentProgress().wordModeMastery?.[wordId] || [];
   return requiredModes.every((mode) => passedModes.includes(mode));
+}
+
+function isWordMasteredForCurrentProfile(wordId) {
+  const requiredModes = currentProfile().quizModes || [];
+  if (requiredModes.length > 0) return isWordMasteredInAllModes(wordId);
+  return (currentProgress().masteredWordIds || []).includes(wordId);
 }
 
 function renderReview() {

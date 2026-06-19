@@ -80,8 +80,7 @@ function compactAccessoryImagesForLocalStorage(state) {
           if (shouldStripDataUrl(compact[field])) compact[field] = "";
         });
         return compact;
-      })
-      .filter((item) => item?.wearableSrc || item?.wearImage || item?.image);
+      });
   };
 
   const library = next?.accessoryLibrary;
@@ -129,6 +128,32 @@ function ensureStateShape(state) {
 function timestampMs(value) {
   const ms = Date.parse(value || "");
   return Number.isFinite(ms) ? ms : 0;
+}
+
+function hasMeaningfulStateData(state) {
+  if (!state || typeof state !== "object") return false;
+  if (Array.isArray(state.customWords) && state.customWords.length > 0) return true;
+  const library = state.accessoryLibrary;
+  if (Array.isArray(library?.customAccessories) && library.customAccessories.length > 0) return true;
+  const garden = state.garden;
+  if ((Number(garden?.sharedGardenPoints) || 0) > 0 || (Number(garden?.sharedGardenLevel) || 1) > 1) return true;
+
+  return Object.values(state.children || {}).some((child) => {
+    if (!child || typeof child !== "object") return false;
+    if ((Number(child.stars) || 0) > 0 || (Number(child.diamonds) || 0) > 0) return true;
+    return [
+      "learnedWordIds",
+      "masteredWordIds",
+      "wrongWordIds",
+      "completedStageIds",
+      "claimedStageRewardIds",
+      "rewardCoupons",
+      "customWords",
+      "customAccessories"
+    ].some((field) => Array.isArray(child[field]) && child[field].length > 0)
+      || (Array.isArray(child.unlockedAccessories) && child.unlockedAccessories.some((id) => id && id !== "none"))
+      || (Array.isArray(child.equippedAccessories) && child.equippedAccessories.some((id) => id && id !== "none"));
+  });
 }
 
 function withUpdatedAt(state, updatedAt = new Date().toISOString()) {
@@ -305,6 +330,10 @@ async function startCloudListener() {
       const localState = getMutableState();
       const remoteUpdatedAt = timestampMs(remoteState.updatedAt);
       const localUpdatedAt = timestampMs(localState.updatedAt);
+      if (!hasMeaningfulStateData(localState) && hasMeaningfulStateData(remoteState)) {
+        applyRemoteState(remoteState);
+        return;
+      }
       if (localUpdatedAt > remoteUpdatedAt) {
         try {
           await syncToCloud(localState);
@@ -353,7 +382,7 @@ async function init() {
       return getMutableState();
     }
 
-    if (!localState || timestampMs(remoteState.updatedAt) > timestampMs(localState.updatedAt)) {
+    if (!localState || !hasMeaningfulStateData(localState) || timestampMs(remoteState.updatedAt) > timestampMs(localState.updatedAt)) {
       applyRemoteState(remoteState);
       return remoteState;
     }
@@ -477,7 +506,7 @@ function enableCloudSync(adapter) {
   cloudStatus = { ...cloudStatus, syncMode: "cloud", online: false, syncing: true, error: null };
   const current = getMutableState();
   current.syncMode = "cloud";
-  saveState(current, { skipCloudPush: true, source: "enable-cloud" });
+  saveState(current, { keepUpdatedAt: true, skipCloudPush: true, source: "enable-cloud" });
 }
 
 function applyRemoteState(remoteState) {
