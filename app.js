@@ -2510,19 +2510,25 @@ function bindLearning() {
   });
 
   $("#nextWord").addEventListener("click", () => {
-    const words = activeCategory().words;
-    state.wordIndex = (state.wordIndex + 1) % words.length;
-    renderLearn();
+    goToNextLearningWord();
   });
 
   $("#knownWord").addEventListener("click", () => {
     const category = activeCategory();
     const word = category.words[state.wordIndex];
     markLearned(category.id, word);
-    state.wordIndex = Math.min(state.wordIndex + 1, category.words.length - 1);
-    renderAll();
-    renderLearn();
+    goToNextLearningWord();
+    renderHeader();
+    renderHomeRewardSummary();
+    renderCategories();
   });
+}
+
+function goToNextLearningWord() {
+  const words = activeCategory().words;
+  if (!words.length) return;
+  state.wordIndex = (state.wordIndex + 1) % words.length;
+  renderLearn();
 }
 
 function showView(viewName) {
