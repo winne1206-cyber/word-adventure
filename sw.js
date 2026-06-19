@@ -1,4 +1,4 @@
-const CACHE_NAME = "word-adventure-v20260620-upload-progress-v1";
+const CACHE_NAME = "word-adventure-v20260620-quiz-text-fix-v1";
 const APP_SHELL = [
   "./",
   "./index.html",

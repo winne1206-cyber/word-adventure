@@ -1754,7 +1754,7 @@ function normalizeRewardStoreItems(items) {
       name: String(item.name || "").trim(),
       costDiamonds: Math.max(1, Number.parseInt(item.costDiamonds, 10) || 1),
       type: String(item.type || "physical"),
-      icon: String(item.icon || "??").trim() || "??"
+      icon: String(item.icon || "🎁").trim() || "🎁"
     }))
     .filter((item) => item.name);
 }
@@ -1788,7 +1788,7 @@ function migrateLegacyCustomWords(targetProgress) {
 
 function speakWord(text) {
   if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
-    showSpeechMessage("??蝵格???舀?潮?");
+    showSpeechMessage("這個瀏覽器不支援發音功能。");
     return;
   }
 
@@ -3904,9 +3904,9 @@ function renderQuizQuestion() {
 function renderNotEnoughLearnedWords() {
   $("#quizBox").innerHTML = `
     <div class="empty-state compact">
-      <span>??/span>
-      <strong>?桀?摮豢??摮?銝?皜祇?嚗????撠?4 ?摮?嚗?/strong>
-      <button class="primary-button" type="button" id="goLearnFromQuiz">?餃飛?桀?</button>
+      <span>📚</span>
+      <strong>這個關卡已學會的單字還不夠測驗，請先收集至少 4 個單字。</strong>
+      <button class="primary-button" type="button" id="goLearnFromQuiz">去學單字</button>
     </div>
   `;
 
@@ -3938,20 +3938,20 @@ function renderQuizResults() {
   });
   saveProgress();
 
-  $("#quizTitle").textContent = "皜祇?蝯?";
+  $("#quizTitle").textContent = "測驗結果";
   $("#quizBox").innerHTML = `
     <div class="quiz-result">
-      <strong>?祆活皜祇?摰?嚗?/strong>
+      <strong>完成測驗，太棒了！</strong>
       <div class="result-grid">
-        <span>蝮賡???/span><b>${total}</b>
-        <span>蝑?</span><b>${correct}</b>
-        <span>蝑</span><b>${wrong}</b>
-        <span>?脣???</span><b>${quiz.starsEarned}</b>
+        <span>題數</span><b>${total}</b>
+        <span>答對</span><b>${correct}</b>
+        <span>答錯</span><b>${wrong}</b>
+        <span>獲得星星</span><b>${quiz.starsEarned}</b>
       </div>
       <div class="quiz-actions">
-        <button class="primary-button" type="button" id="retryQuiz">?葫銝甈?/button>
-        <button class="soft-button" type="button" id="quizHome">????/button>
-        <button class="soft-button" type="button" id="quizReview">?舫?銴?</button>
+        <button class="primary-button" type="button" id="retryQuiz">再玩一次</button>
+        <button class="soft-button" type="button" id="quizHome">回首頁</button>
+        <button class="soft-button" type="button" id="quizReview">錯題複習</button>
       </div>
     </div>
   `;
@@ -4027,7 +4027,7 @@ function claimStageReward(categoryId) {
   addGardenPoints(childId, 10);
 
   saveProgress();
-  showRewardToast(`?剖?摰??嚗敺?${rewardDiamonds} 憿????`);
+  showRewardToast(`完成關卡獎勵！獲得 ${rewardDiamonds} 顆鑽石！`);
   renderAll();
 }
 
@@ -4113,15 +4113,15 @@ function renderSpellingQuiz(picked) {
     <div class="quiz-question">
       ${wordVisualMarkup(picked, "quiz-picture-visual")}
       <div class="quiz-meaning">${meaningMarkup(picked)}</div>
-      <button class="sound-button small" type="button" data-speak="${escapeHtml(picked.en)}">?? ?潮</button>
-      <p>隢撓?仿摮??望??潭?</p>
+      <button class="sound-button small" type="button" data-speak="${escapeHtml(picked.en)}">🔊 發音</button>
+      <p>請看中文和圖片，拼出英文單字。</p>
     </div>
     <form class="spelling-form" id="spellingForm" autocomplete="off">
-      <input id="spellingInput" name="spelling" type="text" inputmode="latin" autocapitalize="none" spellcheck="false" aria-label="?望??澆?" placeholder="type the word">
-      <button class="primary-button" type="submit">?蝑? ??/button>
+      <input id="spellingInput" name="spelling" type="text" inputmode="latin" autocapitalize="none" spellcheck="false" aria-label="輸入英文單字" placeholder="type the word">
+      <button class="primary-button" type="submit">送出答案</button>
     </form>
     <div class="quiz-actions">
-      <button class="soft-button small" type="button" id="changeQuizMode">?芋撘?/button>
+      <button class="soft-button small" type="button" id="changeQuizMode">換模式</button>
     </div>
     <p class="feedback" id="quizFeedback"></p>
   `;
@@ -4230,9 +4230,9 @@ function renderReview() {
   if (!reviewWords.length) {
     $("#reviewList").innerHTML = `
       <div class="empty-state">
-        <span>??</span>
-        <strong>?桀?瘝??舫?</strong>
-        <p>憭芣?鈭??臭誑?撠葫撽??啁???/p>
+        <span>🌟</span>
+        <strong>目前沒有錯題</strong>
+        <p>答錯的單字會出現在這裡，方便之後複習。</p>
       </div>
     `;
     return;
@@ -4245,10 +4245,10 @@ function renderReview() {
         ${wordVisualMarkup(word, "review-visual")}
         <div>
           <strong>${word.en}</strong>
-          <p>${meaningMarkup(word)}??{word.categoryZh}</p>
+          <p>${meaningMarkup(word)}・${escapeHtml(word.categoryZh || "")}</p>
         </div>
-        <button class="sound-button small" type="button" data-speak="${escapeHtml(word.en)}">?? ?潮</button>
-        <button class="soft-button small" type="button" data-review-done="${word.en}" data-review-id="${wordId}">摮豢?鈭?/button>
+        <button class="sound-button small" type="button" data-speak="${escapeHtml(word.en)}">🔊 發音</button>
+        <button class="soft-button small" type="button" data-review-done="${word.en}" data-review-id="${wordId}">我會了</button>
       </article>
     `;
   }).join("");
@@ -4346,7 +4346,7 @@ function renderRewards() {
   $("#rewardStore").innerHTML = `
     <section class="store-section">
       <div class="store-heading">
-        <h3>?賜??</h3>
+        <h3>可兌換獎勵</h3>
         <strong>💎 ${current.diamonds}</strong>
       </div>
       <div class="store-grid">
