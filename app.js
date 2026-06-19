@@ -1181,6 +1181,7 @@ const FIREBASE_STORAGE_VERSION = "12.15.0";
 const FIREBASE_STORAGE_URL = `https://www.gstatic.com/firebasejs/${FIREBASE_STORAGE_VERSION}/firebase-storage.js`;
 const ACCESSORY_UPLOAD_TIMEOUT_MS = 45000;
 const ACCESSORY_INLINE_IMAGE_LIMIT = 420000;
+const ACCESSORY_INLINE_FILE_SIZE_LIMIT = 160 * 1024;
 const ACCESSORY_SLOT_LABELS = {
   all: "全部",
   headTop: "頭頂",
@@ -3121,6 +3122,12 @@ function updateAccessoryAdminPreview() {
 async function uploadAccessoryImage(file, itemId, role, maxEdge, onStatus) {
   if (!file) return "";
   const roleLabel = role === "icon" ? "顯示圖" : "佩戴圖";
+  if (file.size <= ACCESSORY_INLINE_FILE_SIZE_LIMIT) {
+    onStatus?.(`${roleLabel}檔案很小，直接壓縮儲存...`);
+    const inlineBlob = await imageFileToBlob(file, role === "icon" ? 260 : 420, 0.72);
+    return imageBlobToInlineDataUrl(inlineBlob, roleLabel);
+  }
+
   onStatus?.(`正在壓縮${roleLabel}...`);
   const firebase = await import("./firebase.js");
   const storage = await import(FIREBASE_STORAGE_URL);
