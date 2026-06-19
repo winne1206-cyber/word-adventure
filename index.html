@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#8fc8ff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Word Adventure">
+  <title>Word Adventure</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icons/icon.svg">
+  <link rel="stylesheet" href="style.css?v=20260620-startup-render-v1">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="top-bar">
+      <button class="icon-button hidden" id="backButton" type="button" aria-label="返回">‹</button>
+      <div class="brand">
+        <p>學單字・長知識・一起長大！</p>
+        <h1>Word Adventure</h1>
+      </div>
+      <button class="child-switch-button" type="button" data-go="home">切換孩子</button>
+      <div class="reward-pills" aria-label="獎勵數">
+        <div class="star-pill" aria-label="星星數">
+          <span>★</span>
+          <strong id="starCount">0</strong>
+        </div>
+        <div class="star-pill diamond-pill" aria-label="鑽石數">
+          <span>💎</span>
+          <strong id="diamondCount">0</strong>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="view active" id="homeView" aria-labelledby="homeTitle">
+        <div class="profile-switch" id="profileSwitch" aria-label="選擇小朋友"></div>
+
+        <section class="hero-panel">
+          <div class="hero-copy">
+            <p class="eyebrow" id="activeProfileLabel">Jim 的冒險</p>
+            <h2 id="homeTitle">今天也來收集單字星星吧！</h2>
+            <div class="progress-wrap">
+              <div class="progress-label">
+                <span>總進度</span>
+                <strong id="progressText">0%</strong>
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill" id="progressFill"></div>
+              </div>
+            </div>
+            <div class="reward-summary" id="rewardSummary"></div>
+            <div class="garden-summary" id="gardenSummary"></div>
+            <div class="sync-status" id="syncStatus" role="status" aria-live="polite">離線模式</div>
+          </div>
+          <div class="character-stage" aria-hidden="true">
+            <div class="sparkle s1">✦</div>
+            <div class="sparkle s2">♥</div>
+            <div class="buddy" id="homeBuddy">
+              <img class="character-image" src="assets/characters/mascot-main-blue.png?v=main-color-20260617-1215" alt="">
+              <img class="equipped-accessory" src="data:image/gif;base64,R0lGODlhAQABAPAAAP///wAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==" alt="" hidden>
+            </div>
+          </div>
+        </section>
+
+        <nav class="action-grid" aria-label="主要功能">
+          <button class="action-card blue" type="button" data-go="learn">
+            <span class="card-icon">▶</span>
+            <strong>開始學習</strong>
+          </button>
+          <button class="action-card pink" type="button" data-go="quiz">
+            <span class="card-icon">?</span>
+            <strong>小測驗</strong>
+          </button>
+          <button class="action-card purple" type="button" data-go="review">
+            <span class="card-icon">×</span>
+            <strong>錯題複習</strong>
+          </button>
+          <button class="action-card gold" type="button" data-go="dressup">
+            <span class="card-icon">★</span>
+            <strong>角色換裝</strong>
+          </button>
+          <button class="action-card mint" type="button" data-go="rewards">
+            <span class="card-icon">💎</span>
+            <strong>獎勵商店</strong>
+          </button>
+          <button class="action-card green" type="button" data-go="garden">
+            <span class="card-icon">🌱</span>
+            <strong>秘密花園</strong>
+          </button>
+        </nav>
+        <div class="parent-entry">
+          <button class="soft-button small" type="button" data-go="parent">家長設定</button>
+        </div>
+
+        <section class="section-block" aria-labelledby="categoryTitle">
+          <div class="section-heading">
+            <h3 id="categoryTitle">分類關卡</h3>
+            <p>完成每個關卡可解鎖可愛配件</p>
+          </div>
+          <div class="category-grid" id="categoryGrid"></div>
+        </section>
+      </section>
+
+      <section class="view" id="learnView" aria-labelledby="learnTitle">
+        <div class="page-card">
+          <div class="page-heading">
+            <p class="eyebrow" id="learnCategoryLabel">Animals</p>
+            <h2 id="learnTitle">單字學習</h2>
+          </div>
+          <div class="word-card" id="wordCard"></div>
+          <div class="pager">
+            <button class="soft-button" type="button" id="prevWord">上一個</button>
+            <button class="primary-button" type="button" id="knownWord">我學會了 ★</button>
+            <button class="soft-button" type="button" id="nextWord">下一個</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="quizView" aria-labelledby="quizTitle">
+        <div class="page-card">
+          <div class="page-heading">
+            <p class="eyebrow" id="quizCategoryLabel">Quiz Time</p>
+            <h2 id="quizTitle">小測驗</h2>
+          </div>
+          <div class="quiz-box" id="quizBox"></div>
+        </div>
+      </section>
+
+      <section class="view" id="reviewView" aria-labelledby="reviewTitle">
+        <div class="page-card">
+          <div class="page-heading">
+            <p class="eyebrow">Review</p>
+            <h2 id="reviewTitle">錯題複習</h2>
+          </div>
+          <div class="review-list" id="reviewList"></div>
+        </div>
+      </section>
+
+      <section class="view" id="dressupView" aria-labelledby="dressupTitle">
+        <div class="page-card">
+          <div class="page-heading">
+            <p class="eyebrow">Rewards</p>
+            <h2 id="dressupTitle">角色換裝</h2>
+          </div>
+          <p class="form-feedback" id="dressupFeedback" role="status"></p>
+          <div class="dressup-layout">
+            <div class="character-stage large" aria-hidden="true">
+              <div class="buddy" id="dressupBuddy">
+                <img class="character-image" src="assets/characters/mascot-main-blue.png?v=main-color-20260617-1215" alt="">
+                <img class="equipped-accessory" src="data:image/gif;base64,R0lGODlhAQABAPAAAP///wAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==" alt="" hidden>
+              </div>
+            </div>
+            <div class="accessory-grid" id="accessoryGrid"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="rewardsView" aria-labelledby="rewardsTitle">
+        <div class="page-card">
+          <div class="page-heading">
+            <p class="eyebrow">Rewards</p>
+            <h2 id="rewardsTitle">獎勵商店</h2>
+          </div>
+          <p class="form-feedback" id="rewardFeedback" role="status"></p>
+          <div class="reward-store" id="rewardStore"></div>
+        </div>
+      </section>
+
+      <section class="view" id="gardenView" aria-labelledby="gardenTitle">
+        <div class="page-card">
+          <div class="page-heading">
+            <p class="eyebrow">Secret Garden</p>
+            <h2 id="gardenTitle">秘密花園</h2>
+          </div>
+          <div class="garden-box" id="gardenBox"></div>
+        </div>
+      </section>
+
+      <section class="view" id="parentGateView" aria-labelledby="parentGateTitle">
+        <div class="page-card parent-gate-card">
+          <div class="page-heading">
+            <p class="eyebrow">Parent</p>
+            <h2 id="parentGateTitle">家長設定</h2>
+          </div>
+          <form class="parent-password-form" id="parentPasswordForm" autocomplete="off">
+            <label>
+              請輸入家長密碼
+              <input id="parentPasswordInput" name="parentPassword" type="password" inputmode="numeric" pattern="[0-9]*" placeholder="輸入密碼" required>
+            </label>
+            <button class="primary-button" type="submit">進入家長設定</button>
+            <p class="form-feedback" id="parentPasswordFeedback" role="status"></p>
+          </form>
+        </div>
+      </section>
+
+      <section class="view" id="parentView" aria-labelledby="parentTitle">
+        <div class="page-card">
+          <div class="page-heading">
+            <p class="eyebrow">Parent</p>
+            <h2 id="parentTitle">家長設定</h2>
+          </div>
+          <div class="parent-layout">
+            <form class="parent-form" id="customWordForm" autocomplete="off">
+              <label>
+                新增給
+                <select id="customProfile" name="profile">
+                  <option value="jim">Jim（哥哥）</option>
+                  <option value="ethan">Ethan（弟弟）</option>
+                  <option value="ai">Ai（姊姊）</option>
+                </select>
+              </label>
+              <label>
+                英文單字 word
+                <input id="customWord" name="word" type="text" required placeholder="orange">
+              </label>
+              <label>
+                中文意思 meaning
+                <input id="customMeaning" name="meaning" type="text" required placeholder="柳橙">
+              </label>
+              <label>
+                注音 zhuyin
+                <input id="customZhuyin" name="zhuyin" type="text" placeholder="ㄌㄧㄡˇ ㄔㄥˊ">
+              </label>
+              <button class="soft-button small" type="button" id="generateZhuyinButton">自動產生注音</button>
+              <div class="zhuyin-editor" id="zhuyinEditor" aria-label="逐字注音編輯"></div>
+              <p class="zhuyin-hint" id="zhuyinHint">自動注音可能遇到破音字，請確認後再儲存。</p>
+              <label>
+                例句 sentence
+                <input id="customSentence" name="sentence" type="text" placeholder="I like oranges.">
+              </label>
+              <label>
+                emoji
+                <input id="customEmoji" name="emoji" type="text" placeholder="🍊" maxlength="8">
+              </label>
+              <label>
+                分類 category
+                <input id="customCategory" name="category" type="text" required placeholder="animals" list="customCategoryList">
+                <datalist id="customCategoryList"></datalist>
+              </label>
+              <label>
+                難度 difficulty
+                <select id="customDifficulty" name="difficulty">
+                  <option value="easy">easy</option>
+                  <option value="medium">medium</option>
+                  <option value="hard">hard</option>
+                </select>
+              </label>
+              <button class="primary-button" type="submit">儲存單字</button>
+              <p class="form-feedback" id="customWordFeedback" role="status"></p>
+            </form>
+            <section class="import-panel" aria-labelledby="importTitle">
+              <h3 id="importTitle">匯入 Excel CSV</h3>
+              <p>Excel 請另存成 CSV，第一列欄位：word, meaning, zhuyin, sentence, emoji, category, difficulty</p>
+              <input id="importWordsFile" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values">
+              <button class="soft-button small" type="button" id="importWordsButton">匯入到目前選擇的小朋友</button>
+              <p class="form-feedback" id="importWordsFeedback" role="status"></p>
+            </section>
+            <section class="reward-admin-wrap" aria-labelledby="rewardAdminTitle">
+              <div class="section-heading compact">
+                <h3 id="rewardAdminTitle">獎勵商店內容</h3>
+                <p>目前選擇的孩子會有自己的獨立獎勵清單。</p>
+              </div>
+              <form class="reward-item-form" id="rewardItemForm" autocomplete="off">
+                <label>
+                  獎勵名稱
+                  <input id="rewardItemName" name="rewardName" type="text" required placeholder="小零食">
+                </label>
+                <label>
+                  花費鑽石
+                  <input id="rewardItemCost" name="costDiamonds" type="number" min="1" step="1" required placeholder="3">
+                </label>
+                <label>
+                  類型
+                  <select id="rewardItemType" name="type">
+                    <option value="physical">實體獎勵</option>
+                    <option value="snack">零食</option>
+                    <option value="money">獎勵金</option>
+                    <option value="activity">活動</option>
+                  </select>
+                </label>
+                <label>
+                  圖示 emoji
+                  <input id="rewardItemIcon" name="icon" type="text" value="🎁" maxlength="8">
+                </label>
+                <button class="primary-button" type="submit">新增獎勵</button>
+                <p class="form-feedback" id="rewardItemFeedback" role="status"></p>
+              </form>
+              <div class="reward-item-list" id="rewardItemList"></div>
+            </section>
+            <section class="accessory-admin-wrap" aria-labelledby="accessoryAdminTitle">
+              <div class="section-heading compact">
+                <h3 id="accessoryAdminTitle">角色裝備管理</h3>
+                <p>上傳佩戴圖與顯示圖示，並微調在角色身上的位置。</p>
+              </div>
+              <form class="accessory-item-form" id="accessoryItemForm" autocomplete="off">
+                <input id="accessoryEditId" type="hidden">
+                <label>
+                  裝備名稱
+                  <input id="accessoryItemName" name="accessoryName" type="text" required placeholder="彩虹髮箍">
+                </label>
+                <label>
+                  星星價格
+                  <input id="accessoryItemCost" name="costStars" type="number" min="0" step="1" value="100">
+                </label>
+                <label>
+                  佩戴圖（疊在角色身上）
+                  <input id="accessoryWearImage" name="wearImage" type="file" accept="image/png,image/jpeg,image/webp">
+                </label>
+                <label>
+                  顯示圖示（商店卡片，可不填）
+                  <input id="accessoryIconImage" name="iconImage" type="file" accept="image/png,image/jpeg,image/webp">
+                </label>
+                <label>
+                  裝備類型 / slot
+                  <select id="accessorySlot" name="accessorySlot">
+                    <option value="headTop">頭頂</option>
+                    <option value="headSide">髮飾</option>
+                    <option value="face">臉部</option>
+                    <option value="neck">脖子</option>
+                    <option value="body">身體</option>
+                    <option value="back">背後</option>
+                    <option value="pet">小萌寵</option>
+                  </select>
+                </label>
+                <div class="accessory-position-grid">
+                  <label>
+                    寬度 %
+                    <input id="accessoryWidth" type="number" min="10" max="160" step="1" value="70">
+                  </label>
+                  <label>
+                    左右 %
+                    <input id="accessoryLeft" type="number" min="-40" max="140" step="1" value="15">
+                  </label>
+                  <label>
+                    上下 %
+                    <input id="accessoryTop" type="number" min="-70" max="140" step="1" value="-8">
+                  </label>
+                  <label>
+                    層級
+                    <input id="accessoryZIndex" type="number" min="0" max="100" step="1" value="50">
+                  </label>
+                </div>
+                <div class="accessory-admin-preview" id="accessoryAdminPreview">
+                  <div class="buddy wear-custom">
+                    <img class="character-image" src="assets/characters/mascot-main-blue.png?v=20260618-accessories" alt="">
+                    <img class="equipped-accessory preview-accessory" id="accessoryPreviewImage" alt="" hidden>
+                  </div>
+                </div>
+                <div class="form-actions-row">
+                  <button class="primary-button" type="submit" id="accessorySubmitButton">新增裝備</button>
+                  <button class="soft-button" type="button" id="cancelAccessoryEditButton" hidden>取消編輯</button>
+                </div>
+                <p class="form-feedback" id="accessoryItemFeedback" role="status"></p>
+              </form>
+              <div class="accessory-item-list" id="accessoryItemList"></div>
+            </section>
+            <section class="custom-list-wrap" aria-labelledby="customListTitle">
+              <div class="section-heading compact">
+                <h3 id="customListTitle">已新增單字</h3>
+                <p>哥哥 / 弟弟分開保存</p>
+              </div>
+              <div class="custom-word-list" id="customWordList"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="dataStore.js?v=20260620-local-image-cleanup-v2"></script>
+  <script src="data.js?v=20260619-custom-accessories-only-v1"></script>
+  <script src="app.js?v=20260620-upload-progress-v1"></script>
+</body>
+</html>
