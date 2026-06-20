@@ -203,6 +203,12 @@
             <h2 id="parentTitle">家長設定</h2>
           </div>
           <div class="parent-layout">
+            <section class="import-panel" aria-labelledby="dataBackupTitle">
+              <h3 id="dataBackupTitle">資料安全備份</h3>
+              <p>部署或調整資料結構前，請先下載目前完整 appState JSON 備份。</p>
+              <button class="soft-button small" type="button" id="dataBackupButton">下載 appState 備份</button>
+              <p class="form-feedback" id="dataBackupFeedback" role="status"></p>
+            </section>
             <form class="parent-form" id="customWordForm" autocomplete="off">
               <label>
                 新增給
@@ -370,8 +376,8 @@
     </main>
   </div>
 
-  <script src="dataStore.js?v=20260620-cloud-protect-v1"></script>
+  <script src="dataStore.js?v=20260620-state-protection-v1"></script>
   <script src="data.js?v=20260619-custom-accessories-only-v1"></script>
-  <script src="app.js?v=20260620-require-all-quiz-modes-v1"></script>
+  <script src="app.js?v=20260620-state-protection-v1"></script>
 </body>
 </html>

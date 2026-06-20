@@ -20,6 +20,20 @@ let initializedEmptyCloudDocument = false;
 let cloudUnsubscribe = null;
 let memoryState = null;
 const listeners = new Set();
+const DATA_PROTECTION_MESSAGE = "偵測到可能會清除孩子進度或配件，已停止儲存，請先備份。";
+const IMPORTANT_CHILD_ARRAYS = [
+  "learnedWordIds",
+  "masteredWordIds",
+  "wrongWordIds",
+  "completedStageIds",
+  "claimedStageRewardIds",
+  "rewardCoupons",
+  "customWords",
+  "customAccessories",
+  "unlockedAccessories",
+  "equippedAccessories"
+];
+const REQUIRED_CHILD_IDS = ["jim", "ethan", "ai"];
 
 const GARDEN_LEVEL_RULES = [
   { level: 1, points: 0 },
@@ -121,6 +135,19 @@ function ensureStateShape(state) {
     ? next.garden.childGarden
     : {};
   next.customWords = Array.isArray(next.customWords) ? next.customWords : [];
+  next.accessoryLibrary = next.accessoryLibrary && typeof next.accessoryLibrary === "object"
+    ? next.accessoryLibrary
+    : { customAccessories: [], hiddenAccessoryIds: [], accessoryPositionOverrides: {} };
+  next.accessoryLibrary.customAccessories = Array.isArray(next.accessoryLibrary.customAccessories)
+    ? next.accessoryLibrary.customAccessories
+    : [];
+  next.accessoryLibrary.hiddenAccessoryIds = Array.isArray(next.accessoryLibrary.hiddenAccessoryIds)
+    ? next.accessoryLibrary.hiddenAccessoryIds
+    : [];
+  next.accessoryLibrary.accessoryPositionOverrides = next.accessoryLibrary.accessoryPositionOverrides
+    && typeof next.accessoryLibrary.accessoryPositionOverrides === "object"
+    ? next.accessoryLibrary.accessoryPositionOverrides
+    : {};
   next.settings = next.settings && typeof next.settings === "object" ? next.settings : {};
   return next;
 }
@@ -179,6 +206,114 @@ function fromCloudAppState(data) {
   return ensureStateShape(rest);
 }
 
+function deepMergeDefaults(defaultState, existingState) {
+  if (Array.isArray(defaultState)) return Array.isArray(existingState) ? existingState : defaultState;
+  if (!defaultState || typeof defaultState !== "object") return existingState === undefined ? defaultState : existingState;
+  if (!existingState || typeof existingState !== "object" || Array.isArray(existingState)) return cloneState(defaultState);
+  const merged = { ...cloneState(defaultState), ...cloneState(existingState) };
+  Object.keys(defaultState).forEach((key) => {
+    merged[key] = deepMergeDefaults(defaultState[key], existingState[key]);
+  });
+  Object.keys(existingState).forEach((key) => {
+    if (!(key in defaultState)) merged[key] = existingState[key];
+  });
+  return merged;
+}
+
+function getCustomAccessories(state) {
+  return Array.isArray(state?.accessoryLibrary?.customAccessories) ? state.accessoryLibrary.customAccessories : [];
+}
+
+function accessoryImageFields(item) {
+  return [item?.wearableSrc, item?.wearImage, item?.image, item?.iconSrc, item?.iconImage]
+    .filter((value) => typeof value === "string" && value.trim());
+}
+
+function countMeaningfulArray(value) {
+  return Array.isArray(value) ? value.filter((item) => item && item !== "none").length : 0;
+}
+
+function losesAccessoryImages(previousState, nextState) {
+  const nextById = new Map(getCustomAccessories(nextState).map((item) => [item.id, item]));
+  return getCustomAccessories(previousState).some((previousItem) => {
+    if (!previousItem?.id || !accessoryImageFields(previousItem).length) return false;
+    const nextItem = nextById.get(previousItem.id);
+    return !nextItem || !accessoryImageFields(nextItem).length;
+  });
+}
+
+function isDangerousStateLoss(previousState, nextState) {
+  if (!previousState || !hasMeaningfulStateData(previousState)) return false;
+  if (!nextState || typeof nextState !== "object") return true;
+  if (!nextState.children || typeof nextState.children !== "object") return true;
+  if (REQUIRED_CHILD_IDS.some((childId) => !nextState.children?.[childId])) return true;
+  if (!nextState.accessoryLibrary || typeof nextState.accessoryLibrary !== "object") return true;
+  if (getCustomAccessories(previousState).length > 0 && getCustomAccessories(nextState).length === 0) return true;
+  if (losesAccessoryImages(previousState, nextState)) return true;
+
+  return REQUIRED_CHILD_IDS.some((childId) => {
+    const previousChild = previousState.children?.[childId];
+    const nextChild = nextState.children?.[childId];
+    if (!previousChild || !hasMeaningfulStateData({ children: { [childId]: previousChild } })) return false;
+    if (!nextChild) return true;
+    return IMPORTANT_CHILD_ARRAYS.some((field) => (
+      countMeaningfulArray(previousChild[field]) > 0 && countMeaningfulArray(nextChild[field]) === 0
+    ));
+  });
+}
+
+function showProtectionWarning() {
+  console.error(DATA_PROTECTION_MESSAGE);
+  try {
+    window.dispatchEvent(new CustomEvent("wordAdventure:dataProtectionBlocked", {
+      detail: { message: DATA_PROTECTION_MESSAGE }
+    }));
+    if (typeof window.alert === "function") window.alert(DATA_PROTECTION_MESSAGE);
+  } catch {
+    // The console error above is the reliable fallback for non-browser contexts.
+  }
+}
+
+function protectStateBeforeSave(nextState, previousState = memoryState || readJson(WORD_ADVENTURE_STORAGE_KEY, null)) {
+  const next = ensureStateShape(nextState);
+  if (!next.children || REQUIRED_CHILD_IDS.some((childId) => !next.children?.[childId])) {
+    showProtectionWarning();
+    return false;
+  }
+  if (!next.accessoryLibrary || typeof next.accessoryLibrary !== "object") {
+    showProtectionWarning();
+    return false;
+  }
+  if (!hasMeaningfulStateData(next) && hasMeaningfulStateData(previousState)) {
+    showProtectionWarning();
+    return false;
+  }
+  if (isDangerousStateLoss(previousState, next)) {
+    showProtectionWarning();
+    return false;
+  }
+  return true;
+}
+
+function backupFileName(date = new Date()) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `word-adventure-backup-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}.json`;
+}
+
+function downloadStateBackup(state = getMutableState()) {
+  const backup = ensureStateShape(cloneState(state));
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = backupFileName();
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  return backup;
+}
+
 function uniquePush(list, value) {
   const next = Array.isArray(list) ? [...list] : [];
   if (!next.includes(value)) next.push(value);
@@ -196,11 +331,12 @@ function getState() {
 }
 
 function getMutableState() {
-  return ensureStateShape(compactAccessoryImagesForLocalStorage(cloneState(memoryState || readJson(WORD_ADVENTURE_STORAGE_KEY, {
+  const defaults = {
     syncMode: "local",
     children: {},
     garden: { sharedGardenPoints: 0, sharedGardenLevel: 1, childGarden: {} }
-  }))));
+  };
+  return ensureStateShape(compactAccessoryImagesForLocalStorage(deepMergeDefaults(defaults, cloneState(memoryState || readJson(WORD_ADVENTURE_STORAGE_KEY, null) || {}))));
 }
 
 function loadLocal() {
@@ -211,6 +347,9 @@ function loadLocal() {
 
 function saveLocal(state, options = {}) {
   const next = options.keepUpdatedAt ? ensureStateShape(state) : withUpdatedAt(state);
+  if (!options.skipProtection && !protectStateBeforeSave(next)) {
+    throw new Error(DATA_PROTECTION_MESSAGE);
+  }
   memoryState = cloneState(next);
   let savedState = next;
   try {
@@ -218,9 +357,12 @@ function saveLocal(state, options = {}) {
   } catch (error) {
     if (!isStorageQuotaError(error)) throw error;
     const compact = compactAccessoryImagesForLocalStorage(next);
-    memoryState = cloneState(compact);
-    savedState = compact;
     try {
+      if (!options.skipProtection && !protectStateBeforeSave(compact, next)) {
+        throw new Error(DATA_PROTECTION_MESSAGE);
+      }
+      memoryState = cloneState(compact);
+      savedState = compact;
       writeJson(WORD_ADVENTURE_STORAGE_KEY, compact);
     } catch (retryError) {
       if (!isStorageQuotaError(retryError)) throw retryError;
@@ -279,6 +421,15 @@ async function syncToCloud(state = getMutableState()) {
     notifyStateChange(getMutableState(), { source: "cloud-syncing" });
     const { firestore } = await getCloudModules();
     const progressRef = await getProgressDocRef();
+    const existingSnapshot = await firestore.getDoc(progressRef);
+    const existingRemoteState = existingSnapshot.exists() ? fromCloudAppState(existingSnapshot.data()) : null;
+    if (existingRemoteState && !protectStateBeforeSave(state, existingRemoteState)) {
+      throw new Error(DATA_PROTECTION_MESSAGE);
+    }
+    if (!existingRemoteState && !hasMeaningfulStateData(state)) {
+      showProtectionWarning();
+      throw new Error(DATA_PROTECTION_MESSAGE);
+    }
     const cloudAppState = toCloudAppState(state, firestore);
     await firestore.setDoc(progressRef, cloudAppState, { merge: true });
     const next = fromCloudAppState(cloudAppState);
@@ -331,7 +482,11 @@ async function startCloudListener() {
       const remoteUpdatedAt = timestampMs(remoteState.updatedAt);
       const localUpdatedAt = timestampMs(localState.updatedAt);
       if (!hasMeaningfulStateData(localState) && hasMeaningfulStateData(remoteState)) {
-        applyRemoteState(remoteState);
+        try {
+          applyRemoteState(remoteState);
+        } catch (error) {
+          console.warn("Word Adventure blocked unsafe cloud pull:", error);
+        }
         return;
       }
       if (localUpdatedAt > remoteUpdatedAt) {
@@ -346,7 +501,11 @@ async function startCloudListener() {
 
       if (localUpdatedAt === remoteUpdatedAt && JSON.stringify(localState) !== remoteJson) return;
 
-      applyRemoteState(remoteState);
+      try {
+        applyRemoteState(remoteState);
+      } catch (error) {
+        console.warn("Word Adventure blocked unsafe cloud pull:", error);
+      }
     }, (error) => {
       cloudStatus = { ...cloudStatus, syncMode: "cloud", online: false, syncing: false, error: error?.message || String(error) };
       notifyStateChange(getMutableState(), { source: "cloud-error" });
@@ -506,6 +665,10 @@ function enableCloudSync(adapter) {
   cloudStatus = { ...cloudStatus, syncMode: "cloud", online: false, syncing: true, error: null };
   const current = getMutableState();
   current.syncMode = "cloud";
+  if (REQUIRED_CHILD_IDS.some((childId) => !current.children?.[childId])) {
+    notifyStateChange(current, { source: "enable-cloud" });
+    return;
+  }
   saveState(current, { keepUpdatedAt: true, skipCloudPush: true, source: "enable-cloud" });
 }
 
@@ -540,7 +703,11 @@ function createLocalDataStore() {
     enableCloudSync,
     applyRemoteState,
     startCloudListener,
-    stopCloudListener
+    stopCloudListener,
+    backupState: downloadStateBackup,
+    deepMergeDefaults,
+    protectStateBeforeSave,
+    hasMeaningfulStateData
   };
 }
 
@@ -579,7 +746,11 @@ function createCloudDataStore() {
     enableCloudSync,
     applyRemoteState,
     startCloudListener,
-    stopCloudListener
+    stopCloudListener,
+    backupState: downloadStateBackup,
+    deepMergeDefaults,
+    protectStateBeforeSave,
+    hasMeaningfulStateData
   };
 }
 

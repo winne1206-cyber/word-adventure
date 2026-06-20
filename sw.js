@@ -1,4 +1,4 @@
-const CACHE_NAME = "word-adventure-v20260620-require-all-quiz-modes-v1";
+const CACHE_NAME = "word-adventure-v20260620-state-protection-v1";
 const APP_SHELL = [
   "./",
   "./index.html",

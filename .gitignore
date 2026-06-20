@@ -6,6 +6,7 @@ firebase-debug.log
 .DS_Store
 Thumbs.db
 .env
+word-adventure-backup-*.json
 dist/
 build/
 .cache/

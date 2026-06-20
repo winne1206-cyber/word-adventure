@@ -1277,11 +1277,14 @@ const defaultProgress = () => ({
 });
 
 let legacyCustomWords = loadLegacyCustomWords();
+const initialStoredProgress = window.dataStore?.getState?.();
 let progress = loadProgress();
-try {
-  saveProgress({ keepUpdatedAt: true });
-} catch (error) {
-  console.warn("Word Adventure initial save fallback:", error);
+if (initialStoredProgress && Object.keys(initialStoredProgress).length) {
+  try {
+    saveProgress({ keepUpdatedAt: true });
+  } catch (error) {
+    console.warn("Word Adventure initial save fallback:", error);
+  }
 }
 
 const $ = (selector) => document.querySelector(selector);
@@ -1409,7 +1412,13 @@ function saveProgress(options = {}) {
   progress.activeChildId = state.activeChildId;
   progress.syncMode = window.dataStore?.getSyncStatus?.().syncMode || progress.syncMode || "local";
   progress.garden = normalizeGardenProgress(progress.garden);
-  window.dataStore.saveState(progress, options);
+  try {
+    window.dataStore.saveState(progress, options);
+    return true;
+  } catch (error) {
+    console.error("Word Adventure save blocked:", error);
+    return false;
+  }
 }
 
 function normalizeChildProgress(childProgress, child, sharedLibrary = defaultAccessoryLibrary()) {
@@ -2371,6 +2380,7 @@ function renderCategories() {
 }
 
 function bindParentSettings() {
+  $("#dataBackupButton")?.addEventListener("click", downloadAppStateBackup);
   $("#customWordForm").addEventListener("submit", (event) => {
     event.preventDefault();
     saveCustomWordFromForm();
@@ -2426,6 +2436,24 @@ function bindParentSettings() {
     if (!deleteButton) return;
     deleteCustomAccessory(deleteButton.dataset.deleteAccessoryItem);
   });
+}
+
+function downloadAppStateBackup() {
+  const feedback = $("#dataBackupFeedback");
+  const backupState = {
+    ...progress,
+    activeChildId: state.activeChildId,
+    syncMode: window.dataStore?.getSyncStatus?.().syncMode || progress.syncMode || "local",
+    garden: normalizeGardenProgress(progress.garden),
+    accessoryLibrary: normalizeAccessoryLibrary(progress.accessoryLibrary)
+  };
+  try {
+    window.dataStore?.backupState?.(backupState);
+    if (feedback) feedback.textContent = "已下載目前完整 appState 備份。";
+  } catch (error) {
+    console.error("Word Adventure backup failed:", error);
+    if (feedback) feedback.textContent = "備份下載失敗，請先不要部署。";
+  }
 }
 
 function bindNavigation() {
