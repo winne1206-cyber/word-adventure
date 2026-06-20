@@ -2278,6 +2278,112 @@ function shouldShowZhuyin() {
   return Boolean(currentProfile().showZhuyin);
 }
 
+const EXTRA_ZHUYIN_MAP = {
+  "了": "ㄌㄜ˙",
+  "偶": "ㄡˇ",
+  "價": "ㄐㄧㄚˋ",
+  "具": "ㄐㄩˋ",
+  "刷": "ㄕㄨㄚ",
+  "博": "ㄅㄛˊ",
+  "取": "ㄑㄩˇ",
+  "品": "ㄆㄧㄣˇ",
+  "定": "ㄉㄧㄥˋ",
+  "帶": "ㄉㄞˋ",
+  "復": "ㄈㄨˋ",
+  "戴": "ㄉㄞˋ",
+  "托": "ㄊㄨㄛ",
+  "把": "ㄅㄚˇ",
+  "披": "ㄆㄧ",
+  "拍": "ㄆㄞ",
+  "拖": "ㄊㄨㄛ",
+  "拿": "ㄋㄚˊ",
+  "描": "ㄇㄧㄠˊ",
+  "摩": "ㄇㄛˊ",
+  "擦": "ㄘㄚ",
+  "攀": "ㄆㄢ",
+  "攜": "ㄒㄧ",
+  "料": "ㄌㄧㄠˋ",
+  "旅": "ㄌㄩˇ",
+  "暖": "ㄋㄨㄢˇ",
+  "書": "ㄕㄨ",
+  "杯": "ㄅㄟ",
+  "橡": "ㄒㄧㄤˋ",
+  "檬": "ㄇㄥˊ",
+  "檸": "ㄋㄧㄥˊ",
+  "永": "ㄩㄥˇ",
+  "油": "ㄧㄡˊ",
+  "泳": "ㄩㄥˇ",
+  "活": "ㄏㄨㄛˊ",
+  "淨": "ㄐㄧㄥˋ",
+  "游": "ㄧㄡˊ",
+  "漆": "ㄑㄧ",
+  "火": "ㄏㄨㄛˇ",
+  "爬": "ㄆㄚˊ",
+  "爸": "ㄅㄚˋ",
+  "爺": "ㄧㄝˊ",
+  "爽": "ㄕㄨㄤˇ",
+  "特": "ㄊㄜˋ",
+  "玻": "ㄅㄛ",
+  "班": "ㄅㄢ",
+  "現": "ㄒㄧㄢˋ",
+  "璃": "ㄌㄧˊ",
+  "用": "ㄩㄥˋ",
+  "畫": "ㄏㄨㄚˋ",
+  "皮": "ㄆㄧˊ",
+  "眼": "ㄧㄢˇ",
+  "睛": "ㄐㄧㄥ",
+  "禮": "ㄌㄧˇ",
+  "穿": "ㄔㄨㄢ",
+  "端": "ㄉㄨㄢ",
+  "精": "ㄐㄧㄥ",
+  "累": "ㄌㄟˋ",
+  "綿": "ㄇㄧㄢˊ",
+  "羊": "ㄧㄤˊ",
+  "薩": "ㄙㄚˋ",
+  "貨": "ㄏㄨㄛˋ",
+  "賣": "ㄇㄞˋ",
+  "遠": "ㄩㄢˇ",
+  "鏡": "ㄐㄧㄥˋ",
+  "館": "ㄍㄨㄢˇ"
+};
+
+let derivedZhuyinMap = null;
+
+function getZhuyinForChar(char) {
+  return ZHUYIN_MAP[char] || EXTRA_ZHUYIN_MAP[char] || getDerivedZhuyinMap()[char] || "";
+}
+
+function getDerivedZhuyinMap() {
+  if (derivedZhuyinMap) return derivedZhuyinMap;
+  derivedZhuyinMap = {};
+  Object.values(WORD_BANKS || {}).forEach((stages) => {
+    stages.forEach((stage) => {
+      stage.words.forEach((word) => {
+        (word.zhuyinChars || []).forEach((item) => {
+          if (item?.char && item.ruby && !derivedZhuyinMap[item.char]) {
+            derivedZhuyinMap[item.char] = item.ruby;
+          }
+        });
+      });
+    });
+  });
+  return derivedZhuyinMap;
+}
+
+function normalizeZhuyinChars(word) {
+  if (Array.isArray(word.zhuyinChars) && word.zhuyinChars.length) {
+    return word.zhuyinChars.map((item) => ({
+      char: String(item.char || ""),
+      ruby: item.ruby || getZhuyinForChar(item.char)
+    })).filter((item) => item.char);
+  }
+
+  return buildZhuyinChars(getMeaning(word), word.zhuyin).map((item) => ({
+    ...item,
+    ruby: item.ruby || getZhuyinForChar(item.char)
+  }));
+}
+
 
 function getMascotImageForContext(context, colorId = currentProgress().avatarColor) {
   const baseImage = MASCOT_IMAGES[context] || MASCOT_IMAGES.default;
@@ -2342,9 +2448,10 @@ function renderRubyMeaning(word) {
     return `<span class="meaning">${getMeaning(word)}</span>`;
   }
 
-  if (Array.isArray(word.zhuyinChars) && word.zhuyinChars.length) {
-    return word.zhuyinChars.map((item) => (
-      `<span class="ruby-pair"><span class="ruby-char">${item.char}</span>${renderSideZhuyin(item.ruby)}</span>`
+  const zhuyinChars = normalizeZhuyinChars(word);
+  if (zhuyinChars.length) {
+    return zhuyinChars.map((item) => (
+      `<span class="ruby-pair"><span class="ruby-char">${escapeHtml(item.char)}</span>${renderSideZhuyin(item.ruby)}</span>`
     )).join("");
   }
 
@@ -2362,9 +2469,9 @@ function renderSideZhuyin(ruby) {
   const body = chars.filter((char) => !toneMarks.includes(char));
 
   return `
-    <span class="side-zhuyin" aria-label="${ruby}">
-      <span class="side-zhuyin-body">${body.map((char) => `<span>${char}</span>`).join("")}</span>
-      ${tone ? `<span class="side-zhuyin-tone">${tone}</span>` : ""}
+    <span class="side-zhuyin" aria-label="${escapeHtml(ruby)}">
+      <span class="side-zhuyin-body">${body.map((char) => `<span>${escapeHtml(char)}</span>`).join("")}</span>
+      ${tone ? `<span class="side-zhuyin-tone">${escapeHtml(tone)}</span>` : ""}
     </span>
   `;
 }
@@ -3786,7 +3893,7 @@ function handleGenerateZhuyin() {
 function generateZhuyinChars(meaning) {
   return Array.from(meaning.replace(/\s+/g, "")).map((char) => ({
     char,
-    ruby: ZHUYIN_MAP[char] || ""
+    ruby: getZhuyinForChar(char)
   }));
 }
 
