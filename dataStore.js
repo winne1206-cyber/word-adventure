@@ -653,8 +653,9 @@ async function startCloudListener() {
         try {
           await syncToCloud(localState);
         } catch (error) {
-          cloudStatus = { ...cloudStatus, syncMode: "cloud", online: false, syncing: false, error: error?.message || String(error) };
-          notifyStateChange(getMutableState(), { source: "cloud-error" });
+          console.warn("Word Adventure cloud push postponed from listener:", error?.message || error);
+          cloudStatus = { ...cloudStatus, syncMode: "cloud", online: true, syncing: false, error: null };
+          notifyStateChange(getMutableState(), { source: "cloud-push-postponed" });
         }
         return;
       }
@@ -714,7 +715,14 @@ async function init() {
     }
 
     if (timestampMs(localState.updatedAt) > timestampMs(remoteState.updatedAt)) {
-      return await syncToCloud(localState);
+      try {
+        return await syncToCloud(localState);
+      } catch (error) {
+        console.warn("Word Adventure cloud push postponed during init:", error?.message || error);
+        applyRemoteState(remoteState);
+        scheduleInlineAccessoryImageMigration(remoteState);
+        return remoteState;
+      }
     }
 
     scheduleInlineAccessoryImageMigration(remoteState);

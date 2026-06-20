@@ -1,4 +1,4 @@
-const CACHE_NAME = "word-adventure-v20260620-nonblocking-cloud-load-v1";
+const CACHE_NAME = "word-adventure-v20260620-cloud-load-hotfix-v1";
 const APP_SHELL = [
   "./",
   "./index.html",

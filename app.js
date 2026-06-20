@@ -2876,8 +2876,8 @@ function renderHome() {
 function syncStatusInfo() {
   const status = window.dataStore?.getSyncStatus?.() || {};
   if (status.syncing) return { text: "同步中", tone: "syncing" };
-  if (status.error) return { text: "同步失敗，稍後再試", tone: "error" };
   if (status.syncMode === "cloud" && status.online) return { text: "已同步", tone: "synced" };
+  if (status.error) return { text: "同步失敗，稍後再試", tone: "error" };
   return { text: "離線模式", tone: "offline" };
 }
 
