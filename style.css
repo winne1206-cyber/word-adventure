@@ -1379,6 +1379,34 @@ img.big-emoji {
   color: #4d8f33;
 }
 
+.mastery-status {
+  width: min(100%, 460px);
+  display: grid;
+  gap: 6px;
+  padding: 12px 16px;
+  border-radius: 18px;
+  background: #fff7df;
+  color: var(--ink);
+  text-align: left;
+  font-weight: 900;
+}
+
+.mastery-status.done {
+  background: #e7f8d8;
+  color: #3f7f2d;
+}
+
+.mastery-status strong,
+.mastery-status p {
+  margin: 0;
+}
+
+.mastery-status p {
+  color: #5b6f97;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
 .pager,
 .option-grid,
 .quiz-actions {

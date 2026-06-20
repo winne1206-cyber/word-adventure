@@ -1,4 +1,4 @@
-const CACHE_NAME = "word-adventure-v20260620-per-child-sync-v1";
+const CACHE_NAME = "word-adventure-v20260620-mastery-status-v1";
 const APP_SHELL = [
   "./",
   "./index.html",

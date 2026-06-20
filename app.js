@@ -2162,13 +2162,7 @@ function hydrateLearnedWordIds(profileProgress, profile) {
 
 function hydrateWrongWordIds(profileProgress, profile) {
   const existing = Array.isArray(profileProgress.wrongWordIds) ? profileProgress.wrongWordIds : [];
-  const level = profile.wordSetId || profile.level || "elementary";
-  const categories = WORD_BANKS[level] || WORD_DATA;
-  const words = categories.flatMap((category) => category.words.map((word) => ({
-    ...word,
-    id: getWordId(word, category.id),
-    categoryId: category.id
-  })));
+  const words = hydrationWordsForProfile(profileProgress, profile);
   const ids = new Set(existing);
 
   (profileProgress.mistakes || []).forEach((mistake) => {
@@ -2183,13 +2177,7 @@ function hydrateWrongWordIds(profileProgress, profile) {
 }
 
 function hydrateWordModeMastery(profileProgress, profile) {
-  const level = profile.wordSetId || profile.level || "elementary";
-  const categories = WORD_BANKS[level] || WORD_DATA;
-  const words = categories.flatMap((category) => category.words.map((word) => ({
-    ...word,
-    id: getWordId(word, category.id),
-    categoryId: category.id
-  })));
+  const words = hydrationWordsForProfile(profileProgress, profile);
   const mastery = migrateWordModeMastery(profileProgress.wordModeMastery || {});
 
   (profileProgress.quizResults || []).forEach((result) => {
@@ -2206,6 +2194,23 @@ function hydrateWordModeMastery(profileProgress, profile) {
   });
 
   return mastery;
+}
+
+function hydrationWordsForProfile(profileProgress, profile) {
+  const level = profile.wordSetId || profile.level || "elementary";
+  const categories = WORD_BANKS[level] || WORD_DATA;
+  const bankWords = categories.flatMap((category) => category.words.map((word) => ({
+    ...word,
+    id: getWordId(word, category.id),
+    categoryId: category.id
+  })));
+  const customWords = (profileProgress.customWords || []).map((word) => ({
+    ...word,
+    id: getWordId(word, word.categoryId),
+    categoryId: word.categoryId || word.stageId || `${word.appCategory || normalizeAppCategoryId(word.category || word.categoryZh || "custom")}_${word.difficulty || "easy"}`
+  }));
+
+  return [...bankWords, ...customWords];
 }
 
 
@@ -2370,7 +2375,7 @@ function meaningMarkup(word) {
 
 function choiceOptionMarkup(word, mode) {
   if (mode.id === "choice_en_to_zh") return meaningMarkup(word);
-  return mode.option(word);
+  return escapeHtml(mode.option(word));
 }
 
 
@@ -3814,6 +3819,7 @@ function renderLearn() {
   const word = category.words[state.wordIndex];
   const wordId = getWordId(word, category.id);
   const isLearned = (currentProgress().learnedWordIds || []).includes(wordId);
+  const mastery = masteryStatusForWord(word, wordId);
 
   $("#learnCategoryLabel").textContent = `${category.zh} ${category.en}`;
   $("#wordCard").innerHTML = `
@@ -3832,7 +3838,43 @@ function renderLearn() {
     <span class="learned-badge ${isLearned ? "done" : ""}">
       ${isLearned ? "已學會" : "還沒收集"}
     </span>
+    ${masteryStatusMarkup(mastery)}
   `;
+}
+
+function masteryStatusForWord(word, wordId = getWordId(word, word.categoryId)) {
+  const requiredModes = quizModesRequiredForWord(word);
+  const passedModes = currentProgress().wordModeMastery?.[wordId] || [];
+  const passedRequiredModes = requiredModes.filter((modeId) => passedModes.includes(modeId));
+  const missingModes = requiredModes.filter((modeId) => !passedModes.includes(modeId));
+  return {
+    requiredModes,
+    passedModes: passedRequiredModes,
+    missingModes,
+    isMastered: requiredModes.length > 0 && missingModes.length === 0
+  };
+}
+
+function masteryStatusMarkup(status) {
+  if (!status.requiredModes.length) {
+    return `
+      <div class="mastery-status">
+        <strong>掌握狀態：不需測驗</strong>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="mastery-status ${status.isMastered ? "done" : ""}">
+      <strong>${status.isMastered ? "已掌握" : "尚未掌握"}</strong>
+      <p>已通過：${modeLabelList(status.passedModes) || "還沒有"}</p>
+      ${status.missingModes.length ? `<p>還缺：${modeLabelList(status.missingModes)}</p>` : ""}
+    </div>
+  `;
+}
+
+function modeLabelList(modeIds) {
+  return modeIds.map((modeId) => QUIZ_MODES[modeId]?.label || modeId).map(escapeHtml).join("、");
 }
 
 
@@ -4190,7 +4232,7 @@ function renderChoiceQuiz(picked, mode, learnedPool) {
     </div>
     <div class="option-grid">
       ${shuffle(options).map((word) => `
-        <button class="option-button" type="button" data-answer="${mode.option(word)}">
+        <button class="option-button" type="button" data-answer="${escapeHtml(mode.option(word))}">
           ${choiceOptionMarkup(word, mode)}
         </button>
       `).join("")}
