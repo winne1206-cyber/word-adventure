@@ -262,8 +262,9 @@ function isDangerousStateLoss(previousState, nextState) {
   });
 }
 
-function showProtectionWarning() {
+function showProtectionWarning(options = {}) {
   console.error(DATA_PROTECTION_MESSAGE);
+  if (options.silent) return;
   try {
     window.dispatchEvent(new CustomEvent("wordAdventure:dataProtectionBlocked", {
       detail: { message: DATA_PROTECTION_MESSAGE }
@@ -274,22 +275,22 @@ function showProtectionWarning() {
   }
 }
 
-function protectStateBeforeSave(nextState, previousState = memoryState || readJson(WORD_ADVENTURE_STORAGE_KEY, null)) {
+function protectStateBeforeSave(nextState, previousState = memoryState || readJson(WORD_ADVENTURE_STORAGE_KEY, null), options = {}) {
   const next = ensureStateShape(nextState);
   if (!next.children || REQUIRED_CHILD_IDS.some((childId) => !next.children?.[childId])) {
-    showProtectionWarning();
+    showProtectionWarning(options);
     return false;
   }
   if (!next.accessoryLibrary || typeof next.accessoryLibrary !== "object") {
-    showProtectionWarning();
+    showProtectionWarning(options);
     return false;
   }
   if (!hasMeaningfulStateData(next) && hasMeaningfulStateData(previousState)) {
-    showProtectionWarning();
+    showProtectionWarning(options);
     return false;
   }
   if (isDangerousStateLoss(previousState, next)) {
-    showProtectionWarning();
+    showProtectionWarning(options);
     return false;
   }
   return true;
@@ -327,7 +328,7 @@ function getChild(state, childId) {
 }
 
 function getState() {
-  return memoryState ? ensureStateShape(compactAccessoryImagesForLocalStorage(memoryState)) : loadLocal();
+  return memoryState ? ensureStateShape(cloneState(memoryState)) : loadLocal();
 }
 
 function getMutableState() {
@@ -336,12 +337,12 @@ function getMutableState() {
     children: {},
     garden: { sharedGardenPoints: 0, sharedGardenLevel: 1, childGarden: {} }
   };
-  return ensureStateShape(compactAccessoryImagesForLocalStorage(deepMergeDefaults(defaults, cloneState(memoryState || readJson(WORD_ADVENTURE_STORAGE_KEY, null) || {}))));
+  return ensureStateShape(deepMergeDefaults(defaults, cloneState(memoryState || readJson(WORD_ADVENTURE_STORAGE_KEY, null) || {})));
 }
 
 function loadLocal() {
   const state = readJson(WORD_ADVENTURE_STORAGE_KEY, null);
-  memoryState = state ? ensureStateShape(compactAccessoryImagesForLocalStorage(state)) : null;
+  memoryState = state ? ensureStateShape(state) : null;
   return memoryState ? cloneState(memoryState) : null;
 }
 
@@ -358,12 +359,9 @@ function saveLocal(state, options = {}) {
     if (!isStorageQuotaError(error)) throw error;
     const compact = compactAccessoryImagesForLocalStorage(next);
     try {
-      if (!options.skipProtection && !protectStateBeforeSave(compact, next)) {
-        throw new Error(DATA_PROTECTION_MESSAGE);
-      }
-      memoryState = cloneState(compact);
-      savedState = compact;
       writeJson(WORD_ADVENTURE_STORAGE_KEY, compact);
+      memoryState = cloneState(next);
+      savedState = next;
     } catch (retryError) {
       if (!isStorageQuotaError(retryError)) throw retryError;
       console.warn("Word Adventure localStorage quota fallback: progress kept in memory for this session.", retryError);
@@ -423,8 +421,9 @@ async function syncToCloud(state = getMutableState()) {
     const progressRef = await getProgressDocRef();
     const existingSnapshot = await firestore.getDoc(progressRef);
     const existingRemoteState = existingSnapshot.exists() ? fromCloudAppState(existingSnapshot.data()) : null;
-    if (existingRemoteState && !protectStateBeforeSave(state, existingRemoteState)) {
-      throw new Error(DATA_PROTECTION_MESSAGE);
+    if (existingRemoteState && !protectStateBeforeSave(state, existingRemoteState, { silent: true })) {
+      applyRemoteState(existingRemoteState);
+      return existingRemoteState;
     }
     if (!existingRemoteState && !hasMeaningfulStateData(state)) {
       showProtectionWarning();
@@ -481,6 +480,14 @@ async function startCloudListener() {
       const localState = getMutableState();
       const remoteUpdatedAt = timestampMs(remoteState.updatedAt);
       const localUpdatedAt = timestampMs(localState.updatedAt);
+      if (hasMeaningfulStateData(remoteState) && isDangerousStateLoss(remoteState, localState)) {
+        try {
+          applyRemoteState(remoteState);
+        } catch (error) {
+          console.warn("Word Adventure blocked unsafe cloud pull:", error);
+        }
+        return;
+      }
       if (!hasMeaningfulStateData(localState) && hasMeaningfulStateData(remoteState)) {
         try {
           applyRemoteState(remoteState);
@@ -542,6 +549,11 @@ async function init() {
     }
 
     if (!localState || !hasMeaningfulStateData(localState) || timestampMs(remoteState.updatedAt) > timestampMs(localState.updatedAt)) {
+      applyRemoteState(remoteState);
+      return remoteState;
+    }
+
+    if (hasMeaningfulStateData(remoteState) && isDangerousStateLoss(remoteState, localState)) {
       applyRemoteState(remoteState);
       return remoteState;
     }
