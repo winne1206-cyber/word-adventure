@@ -26,9 +26,19 @@ const GARDEN_LEVELS = [
   { level: 5, points: 180, name: "\u82b1\u53e2", icon: "\ud83c\udf38\ud83c\udf3c", item: "\u82b1\u53e2" },
   { level: 6, points: 300, name: "\u5c0f\u6a39", icon: "\ud83c\udf33", item: "\u5c0f\u6a39" },
   { level: 7, points: 450, name: "\u8774\u8776", icon: "\ud83e\udd8b", item: "\u8774\u8776" },
-  { level: 8, points: 650, name: "\u6c60\u5858", icon: "\ud83c\udf33\ud83d\udca7", item: "\u6c60\u5858" },
-  { level: 9, points: 900, name: "\u5f69\u8679", icon: "\ud83c\udf08", item: "\u5f69\u8679" },
-  { level: 10, points: 1200, name: "\u7955\u5bc6\u82b1\u5712\u5b8c\u6210", icon: "\ud83c\udf08\ud83c\udf33\ud83c\udf38\ud83c\udfe1", item: "\u7955\u5bc6\u5c0f\u5c4b" }
+  { level: 8, points: 900, name: "池塘", icon: "\ud83c\udf33\ud83d\udca7", item: "池塘" },
+  { level: 9, points: 1300, name: "彩虹", icon: "\ud83c\udf08", item: "彩虹" },
+  { level: 10, points: 1800, name: "小橋", icon: "\ud83c\udf09", item: "小橋" },
+  { level: 11, points: 2400, name: "蘑菇圈", icon: "\ud83c\udf44", item: "蘑菇圈" },
+  { level: 12, points: 3100, name: "噴水池", icon: "\u26f2", item: "噴水池" },
+  { level: 13, points: 3900, name: "鳥屋", icon: "\ud83c\udfe0\ud83d\udc26", item: "鳥屋" },
+  { level: 14, points: 4800, name: "星光樹", icon: "\u2728\ud83c\udf33", item: "星光樹" },
+  { level: 15, points: 5800, name: "精靈燈", icon: "\ud83d\udca1\ud83c\udf3f", item: "精靈燈" },
+  { level: 16, points: 7000, name: "花園小路", icon: "\ud83c\udf3c\ud83d\udc3e", item: "花園小路" },
+  { level: 17, points: 8400, name: "夢幻鞦韆", icon: "\ud83c\udf08\u2728", item: "夢幻鞦韆" },
+  { level: 18, points: 10000, name: "月亮池", icon: "\ud83c\udf19\ud83d\udca7", item: "月亮池" },
+  { level: 19, points: 12000, name: "彩虹拱門", icon: "\ud83c\udf08\ud83c\udfe1", item: "彩虹拱門" },
+  { level: 20, points: 14500, name: "夢想花園完成", icon: "\ud83c\udf08\ud83c\udf33\ud83c\udf38\ud83c\udfe1\u2728", item: "夢想花園" }
 ];
 
 const QUIZ_MODES = {
@@ -1726,7 +1736,10 @@ function unlockedGardenItemsForLevel(level, existing = []) {
 
 function normalizeGardenChild(childGarden = {}) {
   const gardenPoints = Math.max(0, Number(childGarden.gardenPoints) || 0);
-  const gardenLevel = calculateGardenLevel(gardenPoints);
+  const gardenLevel = Math.max(
+    calculateGardenLevel(gardenPoints),
+    Math.min(GARDEN_LEVELS.length, Math.max(1, Number(childGarden.gardenLevel) || 1))
+  );
   return {
     gardenPoints,
     gardenLevel,
@@ -1738,7 +1751,10 @@ function normalizeGardenProgress(garden = {}) {
   const base = defaultGardenProgress();
   const sharedGardenPoints = Math.max(0, Number(garden.sharedGardenPoints) || 0);
   base.sharedGardenPoints = sharedGardenPoints;
-  base.sharedGardenLevel = calculateGardenLevel(sharedGardenPoints);
+  base.sharedGardenLevel = Math.max(
+    calculateGardenLevel(sharedGardenPoints),
+    Math.min(GARDEN_LEVELS.length, Math.max(1, Number(garden.sharedGardenLevel) || 1))
+  );
 
   PROFILES.forEach((profile) => {
     base.childGarden[profile.id] = normalizeGardenChild(garden.childGarden?.[profile.id]);
@@ -1758,9 +1774,9 @@ function childGardenProgress(childId = state.activeChildId) {
   return garden.childGarden[childId];
 }
 
-function pointsToNextGardenLevel(points) {
+function pointsToNextGardenLevel(points, level = calculateGardenLevel(points)) {
   const safePoints = Math.max(0, Number(points) || 0);
-  const next = GARDEN_LEVELS.find((item) => item.points > safePoints);
+  const next = GARDEN_LEVELS.find((item) => item.level > level);
   return next ? next.points - safePoints : 0;
 }
 
@@ -2882,7 +2898,7 @@ function renderHomeGardenSummary() {
   if (!box) return;
   const garden = ensureGarden();
   const info = gardenInfoForLevel(garden.sharedGardenLevel);
-  const nextPoints = pointsToNextGardenLevel(garden.sharedGardenPoints);
+  const nextPoints = pointsToNextGardenLevel(garden.sharedGardenPoints, garden.sharedGardenLevel);
   box.innerHTML = `
     <div class="garden-summary-copy">
       <span>${info.icon}</span>
@@ -2894,10 +2910,10 @@ function renderHomeGardenSummary() {
   `;
 }
 
-function gardenStatusMarkup(points) {
-  const level = calculateGardenLevel(points);
+function gardenStatusMarkup(points, preservedLevel = calculateGardenLevel(points)) {
+  const level = Math.max(calculateGardenLevel(points), Math.min(GARDEN_LEVELS.length, Math.max(1, Number(preservedLevel) || 1)));
   const info = gardenInfoForLevel(level);
-  const nextPoints = pointsToNextGardenLevel(points);
+  const nextPoints = pointsToNextGardenLevel(points, level);
   return `
     <div class="garden-visual" aria-hidden="true">${info.icon}</div>
     <strong>Lv.${level} ${info.name}</strong>
@@ -2917,7 +2933,7 @@ function renderGarden() {
         <h3>\u5171\u540c\u79d8\u5bc6\u82b1\u5712</h3>
       </div>
       <div class="garden-scene level-${garden.sharedGardenLevel}">
-        ${gardenStatusMarkup(garden.sharedGardenPoints)}
+        ${gardenStatusMarkup(garden.sharedGardenPoints, garden.sharedGardenLevel)}
       </div>
       <p class="garden-note">${sharedInfo.name}</p>
     </section>
@@ -2935,7 +2951,7 @@ function renderGarden() {
                 <small>${profile.roleName}\u30fb${profile.levelName}</small>
               </div>
             </div>
-            <div class="garden-mini-scene">${gardenStatusMarkup(childGarden.gardenPoints)}</div>
+            <div class="garden-mini-scene">${gardenStatusMarkup(childGarden.gardenPoints, childGarden.gardenLevel)}</div>
             <div class="garden-items">
               <span>\u5df2\u89e3\u9396</span>
               <p>${items.length ? items.map(escapeHtml).join("\u3001") : "\u9084\u5728\u52aa\u529b\u9577\u5927"}</p>
