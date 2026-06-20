@@ -269,7 +269,6 @@ function showProtectionWarning(options = {}) {
     window.dispatchEvent(new CustomEvent("wordAdventure:dataProtectionBlocked", {
       detail: { message: DATA_PROTECTION_MESSAGE }
     }));
-    if (typeof window.alert === "function") window.alert(DATA_PROTECTION_MESSAGE);
   } catch {
     // The console error above is the reliable fallback for non-browser contexts.
   }
@@ -348,7 +347,7 @@ function loadLocal() {
 
 function saveLocal(state, options = {}) {
   const next = options.keepUpdatedAt ? ensureStateShape(state) : withUpdatedAt(state);
-  if (!options.skipProtection && !protectStateBeforeSave(next)) {
+  if (!options.skipProtection && !protectStateBeforeSave(next, undefined, { silent: options.silentProtection })) {
     throw new Error(DATA_PROTECTION_MESSAGE);
   }
   memoryState = cloneState(next);
@@ -689,7 +688,7 @@ function applyRemoteState(remoteState) {
   const next = ensureStateShape(remoteState);
   next.syncMode = "cloud";
   cloudStatus = { ...cloudStatus, syncMode: "cloud", online: true, syncing: false, lastSyncedAt: new Date().toISOString(), error: null };
-  saveState(next, { fromCloud: true, source: "cloud-pull" });
+  saveState(next, { fromCloud: true, source: "cloud-pull", silentProtection: true });
 }
 
 function createLocalDataStore() {
