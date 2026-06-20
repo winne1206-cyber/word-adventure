@@ -1210,7 +1210,7 @@ const ACCESSORY_SLOT_DEFAULTS = {
   neck: { allowMultipleInSlot: false, zIndex: 30 },
   body: { allowMultipleInSlot: true, zIndex: 25 },
   back: { allowMultipleInSlot: false, zIndex: 5 },
-  pet: { allowMultipleInSlot: false, width: 32, left: 78, top: 58, offsetXPercent: 28, offsetYPercent: 28, zIndex: 35 }
+  pet: { allowMultipleInSlot: true, maxEquippedInSlot: 2, width: 32, left: 78, top: 58, offsetXPercent: 28, offsetYPercent: 28, zIndex: 35 }
 };
 const ACCESSORY_SLOT_FILTERS = ["all", "headTop", "headSide", "face", "neck", "body", "back", "pet"];
 let activeAccessorySlotFilter = "all";
@@ -1658,6 +1658,12 @@ function normalizeAccessoryPosition(position) {
   return normalizeAccessoryPositionForSlot(position, "headTop");
 }
 
+function maxEquippedInSlotForAccessory(item) {
+  if (item?.slot === "pet") return 2;
+  if (item?.allowMultipleInSlot) return Infinity;
+  return 1;
+}
+
 function clampNumber(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
@@ -1677,10 +1683,16 @@ function normalizeEquippedAccessoriesForSlots(equippedIds, accessories = sharedA
     }
     const item = byId.get(id);
     if (!item) return;
-    if (!item.allowMultipleInSlot) {
-      for (let index = next.length - 1; index >= 0; index -= 1) {
+    const maxInSlot = maxEquippedInSlotForAccessory(item);
+    if (Number.isFinite(maxInSlot)) {
+      for (let index = 0; index < next.length; index += 1) {
+        const sameSlotCount = next.filter((nextId) => byId.get(nextId)?.slot === item.slot).length;
+        if (sameSlotCount < maxInSlot) break;
         const existing = byId.get(next[index]);
-        if (existing?.slot === item.slot) next.splice(index, 1);
+        if (existing?.slot === item.slot) {
+          next.splice(index, 1);
+          index -= 1;
+        }
       }
     }
     if (!next.includes(id)) next.push(id);
@@ -4795,14 +4807,17 @@ function toggleAccessory(childId, accessoryId) {
 
   if (child.equippedAccessories.includes(accessoryId)) {
     child.equippedAccessories = child.equippedAccessories.filter((id) => id !== accessoryId && id !== "none");
-  } else if (item.allowMultipleInSlot) {
-    child.equippedAccessories = child.equippedAccessories.filter((id) => id !== "none");
-    child.equippedAccessories.push(accessoryId);
   } else {
     const byId = new Map(currentAccessories().map((entry) => [entry.id, entry]));
-    child.equippedAccessories = child.equippedAccessories
-      .filter((id) => id !== "none")
-      .filter((id) => byId.get(id)?.slot !== item.slot);
+    child.equippedAccessories = child.equippedAccessories.filter((id) => id !== "none");
+    const maxInSlot = maxEquippedInSlotForAccessory(item);
+    if (Number.isFinite(maxInSlot)) {
+      while (child.equippedAccessories.filter((id) => byId.get(id)?.slot === item.slot).length >= maxInSlot) {
+        const removeIndex = child.equippedAccessories.findIndex((id) => byId.get(id)?.slot === item.slot);
+        if (removeIndex < 0) break;
+        child.equippedAccessories.splice(removeIndex, 1);
+      }
+    }
     child.equippedAccessories.push(accessoryId);
   }
 
