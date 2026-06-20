@@ -3917,7 +3917,7 @@ function startQuizRound() {
     return;
   }
 
-  const questionWords = shuffle(learnedPool).slice(0, Math.min(10, learnedPool.length));
+  const questionWords = quizQuestionWordsForMode(learnedPool, state.quizMode);
   state.currentQuiz = {
     mode: state.quizMode,
     categoryId: state.quizCategoryId,
@@ -3928,6 +3928,23 @@ function startQuizRound() {
     starsEarned: 0,
     startedAt: new Date().toISOString()
   };
+}
+
+function quizQuestionWordsForMode(pool, modeId) {
+  const targetCount = Math.min(10, pool.length);
+  const notYetPassed = [];
+  const alreadyPassed = [];
+
+  pool.forEach((word) => {
+    const wordId = getWordId(word, word.categoryId);
+    if (isQuizModePassedForWord(wordId, modeId)) {
+      alreadyPassed.push(word);
+    } else {
+      notYetPassed.push(word);
+    }
+  });
+
+  return [...shuffle(notYetPassed), ...shuffle(alreadyPassed)].slice(0, targetCount);
 }
 
 function renderQuizQuestion() {
@@ -4285,13 +4302,29 @@ function markQuizAnswer(isCorrect) {
 }
 
 function isWordMasteredInAllModes(wordId) {
-  const requiredModes = currentProfile().quizModes || [];
+  const word = allWords().find((item) => getWordId(item, item.categoryId) === wordId);
+  const requiredModes = quizModesRequiredForWord(word);
   const passedModes = currentProgress().wordModeMastery?.[wordId] || [];
   return requiredModes.every((mode) => passedModes.includes(mode));
 }
 
+function quizModesRequiredForWord(word) {
+  return (currentProfile().quizModes || []).filter((modeId) => isWordEligibleForQuizMode(word, modeId));
+}
+
+function isWordEligibleForQuizMode(word, modeId) {
+  if (!word || !QUIZ_MODES[modeId]) return false;
+  if (modeId === "choice_picture_to_en") return isPictureQuizWord(word);
+  return true;
+}
+
+function isQuizModePassedForWord(wordId, modeId) {
+  return (currentProgress().wordModeMastery?.[wordId] || []).includes(modeId);
+}
+
 function isWordMasteredForCurrentProfile(wordId) {
-  const requiredModes = currentProfile().quizModes || [];
+  const word = allWords().find((item) => getWordId(item, item.categoryId) === wordId);
+  const requiredModes = quizModesRequiredForWord(word);
   if (requiredModes.length > 0) return isWordMasteredInAllModes(wordId);
   return (currentProgress().masteredWordIds || []).includes(wordId);
 }
