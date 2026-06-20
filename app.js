@@ -2347,10 +2347,39 @@ const EXTRA_ZHUYIN_MAP = {
   "館": "ㄍㄨㄢˇ"
 };
 
+const PHRASE_ZHUYIN_MAP = {
+  "紫色的": "ㄗˇ ㄙㄜˋ ㄉㄜ",
+  "白色的": "ㄅㄞˊ ㄙㄜˋ ㄉㄜ",
+  "早餐": "ㄗㄠˇ ㄘㄢ",
+  "疲累的": "ㄆㄧˊ ㄌㄟˋ ㄉㄜ",
+  "玩偶": "ㄨㄢˊ ㄡˇ",
+  "玩具": "ㄨㄢˊ ㄐㄩˋ",
+  "（短程的）旅行": "ㄉㄨㄢˇ ㄔㄥˊ ㄉㄜ ㄌㄩˇ ㄒㄧㄥˊ",
+  "乾淨的": "ㄍㄢ ㄐㄧㄥˋ ㄉㄜ",
+  "涼爽的": "ㄌㄧㄤˊ ㄕㄨㄤˇ ㄉㄜ",
+  "潮濕的": "ㄔㄠˊ ㄕ ㄉㄜ",
+  "溫暖的": "ㄨㄣ ㄋㄨㄢˇ ㄉㄜ",
+  "第一": "ㄉㄧˋ ㄧ",
+  "數字": "ㄕㄨˋ ㄗˋ",
+  "第三": "ㄉㄧˋ ㄙㄢ",
+  "第二": "ㄉㄧˋ ㄦˋ",
+  "清涼的": "ㄑㄧㄥ ㄌㄧㄤˊ ㄉㄜ",
+  "派對": "ㄆㄞˋ ㄉㄨㄟˋ",
+  "確定的": "ㄑㄩㄝˋ ㄉㄧㄥˋ ㄉㄜ",
+  "總是、永遠": "ㄗㄨㄥˇ ㄕˋ ㄩㄥˇ ㄩㄢˇ",
+  "撿起、接（人）、接（電話）": "ㄐㄧㄢˇ ㄑㄧˇ ㄐㄧㄝ ㄖㄣˊ ㄐㄧㄝ ㄉㄧㄢˋ ㄏㄨㄚˋ",
+  "重的 (物品)": "ㄓㄨㄥˋ ㄉㄜ ㄨˋ ㄆㄧㄣˇ",
+  "短的": "ㄉㄨㄢˇ ㄉㄜ",
+  "湯匙": "ㄊㄤ ㄔˊ",
+  "早到（的）": "ㄗㄠˇ ㄉㄠˋ ㄉㄜ",
+  "昨天": "ㄗㄨㄛˊ ㄊㄧㄢ",
+  "矮的": "ㄞˇ ㄉㄜ"
+};
+
 let derivedZhuyinMap = null;
 
 function getZhuyinForChar(char) {
-  return ZHUYIN_MAP[char] || EXTRA_ZHUYIN_MAP[char] || getDerivedZhuyinMap()[char] || "";
+  return EXTRA_ZHUYIN_MAP[char] || getDerivedZhuyinMap()[char] || ZHUYIN_MAP[char] || "";
 }
 
 function getDerivedZhuyinMap() {
@@ -2371,6 +2400,9 @@ function getDerivedZhuyinMap() {
 }
 
 function normalizeZhuyinChars(word) {
+  const phraseZhuyin = PHRASE_ZHUYIN_MAP[getMeaning(word)];
+  if (phraseZhuyin) return buildDisplayZhuyinChars(getMeaning(word), phraseZhuyin);
+
   if (Array.isArray(word.zhuyinChars) && word.zhuyinChars.length) {
     return word.zhuyinChars.map((item) => ({
       char: String(item.char || ""),
@@ -2382,6 +2414,17 @@ function normalizeZhuyinChars(word) {
     ...item,
     ruby: item.ruby || getZhuyinForChar(item.char)
   }));
+}
+
+function buildDisplayZhuyinChars(meaning, zhuyin) {
+  const meaningChars = Array.from(meaning || "").filter((char) => /\p{Script=Han}/u.test(char));
+  const rubyParts = (zhuyin || "").trim().split(/\s+/).filter(Boolean);
+
+  if (meaningChars.length && meaningChars.length === rubyParts.length) {
+    return meaningChars.map((char, index) => ({ char, ruby: rubyParts[index] }));
+  }
+
+  return buildZhuyinChars(meaning, zhuyin);
 }
 
 

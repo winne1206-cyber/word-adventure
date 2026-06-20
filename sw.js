@@ -1,4 +1,4 @@
-const CACHE_NAME = "word-adventure-v20260620-ethan-zhuyin-v1";
+const CACHE_NAME = "word-adventure-v20260620-zhuyin-corrections-v1";
 const APP_SHELL = [
   "./",
   "./index.html",
