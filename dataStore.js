@@ -3,8 +3,10 @@ const WORD_ADVENTURE_CUSTOM_WORDS_KEY = "wordAdventureCustomWords.v1";
 const DATASTORE_CHANGE_EVENT = "wordAdventure:dataStoreChange";
 const FIREBASE_VERSION = "12.15.0";
 const FIREBASE_FIRESTORE_URL = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-firestore.js`;
+const FIREBASE_STORAGE_URL = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-storage.js`;
 const FIRESTORE_FAMILY_ID = "jiang-family";
 const FIRESTORE_COLLECTION_PATH = ["families", FIRESTORE_FAMILY_ID, "state", "appState"];
+const ACCESSORY_IMAGE_FIELDS = ["wearableSrc", "wearImage", "image", "iconSrc", "iconImage"];
 
 let cloudPushState = null;
 let cloudStatus = {
@@ -224,9 +226,24 @@ function getCustomAccessories(state) {
   return Array.isArray(state?.accessoryLibrary?.customAccessories) ? state.accessoryLibrary.customAccessories : [];
 }
 
+function getAllCustomAccessoryLists(state) {
+  const lists = [];
+  if (Array.isArray(state?.accessoryLibrary?.customAccessories)) lists.push(state.accessoryLibrary.customAccessories);
+  Object.values(state?.children || {}).forEach((child) => {
+    if (Array.isArray(child?.customAccessories)) lists.push(child.customAccessories);
+  });
+  return lists;
+}
+
 function accessoryImageFields(item) {
-  return [item?.wearableSrc, item?.wearImage, item?.image, item?.iconSrc, item?.iconImage]
+  return ACCESSORY_IMAGE_FIELDS.map((field) => item?.[field])
     .filter((value) => typeof value === "string" && value.trim());
+}
+
+function hasInlineAccessoryImages(state) {
+  return getAllCustomAccessoryLists(state).some((items) => (
+    items.some((item) => item && ACCESSORY_IMAGE_FIELDS.some((field) => isDataUrl(item[field])))
+  ));
 }
 
 function countMeaningfulArray(value) {
@@ -426,6 +443,72 @@ async function getCloudModules() {
   return { firebase, firestore };
 }
 
+async function getStorageModules() {
+  const firebase = await import("./firebase.js");
+  const storage = await import(FIREBASE_STORAGE_URL);
+  const session = await firebase.initFirebase();
+  return { firebase, storage, user: session.user };
+}
+
+async function dataUrlToBlob(dataUrl) {
+  const response = await fetch(dataUrl);
+  if (!response.ok) throw new Error("無法讀取配件圖片資料");
+  return response.blob();
+}
+
+function extensionForImageType(type) {
+  if (type === "image/png") return "png";
+  if (type === "image/jpeg") return "jpg";
+  return "webp";
+}
+
+function storageSafeId(value) {
+  return String(value || "image").replace(/[^\w-]/g, "_").slice(0, 80) || "image";
+}
+
+async function uploadInlineAccessoryImage(storageModule, firebaseModule, user, itemId, field, dataUrl) {
+  const blob = await dataUrlToBlob(dataUrl);
+  const extension = extensionForImageType(blob.type);
+  const imageRef = storageModule.ref(
+    firebaseModule.storage,
+    `accessories/${user.uid}/${storageSafeId(itemId)}/${storageSafeId(field)}.${extension}`
+  );
+  await storageModule.uploadBytes(imageRef, blob, { contentType: blob.type || "image/webp" });
+  return storageModule.getDownloadURL(imageRef);
+}
+
+async function moveInlineAccessoryImagesToStorage(state) {
+  const next = cloneState(state);
+  const itemsWithInlineImages = getAllCustomAccessoryLists(next)
+    .flatMap((items) => items)
+    .filter((item) => item && ACCESSORY_IMAGE_FIELDS.some((field) => isDataUrl(item[field])));
+  if (!itemsWithInlineImages.length) return next;
+
+  try {
+    const { firebase, storage, user } = await getStorageModules();
+    const uploaded = new Map();
+
+    for (const item of itemsWithInlineImages) {
+      const fieldUrlMap = new Map();
+      for (const field of ACCESSORY_IMAGE_FIELDS) {
+        const value = item[field];
+        if (!isDataUrl(value)) continue;
+        if (!uploaded.has(value)) {
+          uploaded.set(value, await uploadInlineAccessoryImage(storage, firebase, user, item.id, field, value));
+        }
+        fieldUrlMap.set(field, uploaded.get(value));
+      }
+      fieldUrlMap.forEach((url, field) => {
+        item[field] = url;
+      });
+    }
+  } catch (error) {
+    throw new Error(`配件圖片搬到雲端圖片庫失敗，本機資料已保留：${error?.message || String(error)}`);
+  }
+
+  return ensureStateShape(next);
+}
+
 async function getProgressDocRef() {
   const { firebase, firestore } = await getCloudModules();
   return firestore.doc(firebase.db, ...FIRESTORE_COLLECTION_PATH);
@@ -469,7 +552,7 @@ async function syncToCloud(state = getMutableState()) {
     const progressRef = await getProgressDocRef();
     const existingSnapshot = await firestore.getDoc(progressRef);
     const existingRemoteState = existingSnapshot.exists() ? fromCloudAppState(existingSnapshot.data()) : null;
-    const stateForCloud = existingRemoteState ? mergeStateForCloudPush(state, existingRemoteState) : state;
+    let stateForCloud = existingRemoteState ? mergeStateForCloudPush(state, existingRemoteState) : state;
     if (existingRemoteState && !protectStateBeforeSave(stateForCloud, existingRemoteState, { silent: true })) {
       applyRemoteState(existingRemoteState);
       return existingRemoteState;
@@ -478,12 +561,14 @@ async function syncToCloud(state = getMutableState()) {
       showProtectionWarning();
       throw new Error(DATA_PROTECTION_MESSAGE);
     }
+    stateForCloud = await moveInlineAccessoryImagesToStorage(stateForCloud);
     const cloudAppState = toCloudAppState(stateForCloud, firestore);
     await firestore.setDoc(progressRef, cloudAppState, { merge: true });
     const next = fromCloudAppState(cloudAppState);
     lastCloudPushedJson = JSON.stringify(next);
     cloudStatus = { ...cloudStatus, syncMode: "cloud", online: true, syncing: false, lastSyncedAt: new Date().toISOString(), error: null };
     memoryState = cloneState(next);
+    saveLocal(next, { keepUpdatedAt: true, skipProtection: true });
     notifyStateChange(next, { source: "cloud-push" });
     return next;
   } catch (error) {
@@ -595,6 +680,10 @@ async function init() {
     if (!remoteState) {
       if (localState) return await syncToCloud(localState);
       return getMutableState();
+    }
+
+    if (hasInlineAccessoryImages(remoteState)) {
+      return await syncToCloud(remoteState);
     }
 
     if (!localState || !hasMeaningfulStateData(localState) || timestampMs(remoteState.updatedAt) > timestampMs(localState.updatedAt)) {
