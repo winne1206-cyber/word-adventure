@@ -509,6 +509,25 @@ async function moveInlineAccessoryImagesToStorage(state) {
   return ensureStateShape(next);
 }
 
+function scheduleInlineAccessoryImageMigration(state) {
+  if (!hasInlineAccessoryImages(state)) return;
+  window.setTimeout(async () => {
+    try {
+      await syncToCloud(state);
+    } catch (error) {
+      console.warn("Word Adventure accessory image migration postponed:", error?.message || error);
+      cloudStatus = {
+        ...cloudStatus,
+        syncMode: "cloud",
+        online: true,
+        syncing: false,
+        error: null
+      };
+      notifyStateChange(getMutableState(), { source: "cloud-image-migration-postponed" });
+    }
+  }, 1200);
+}
+
 async function getProgressDocRef() {
   const { firebase, firestore } = await getCloudModules();
   return firestore.doc(firebase.db, ...FIRESTORE_COLLECTION_PATH);
@@ -682,17 +701,15 @@ async function init() {
       return getMutableState();
     }
 
-    if (hasInlineAccessoryImages(remoteState)) {
-      return await syncToCloud(remoteState);
-    }
-
     if (!localState || !hasMeaningfulStateData(localState) || timestampMs(remoteState.updatedAt) > timestampMs(localState.updatedAt)) {
       applyRemoteState(remoteState);
+      scheduleInlineAccessoryImageMigration(remoteState);
       return remoteState;
     }
 
     if (hasMeaningfulStateData(remoteState) && isDangerousStateLoss(remoteState, localState)) {
       applyRemoteState(remoteState);
+      scheduleInlineAccessoryImageMigration(remoteState);
       return remoteState;
     }
 
@@ -700,6 +717,7 @@ async function init() {
       return await syncToCloud(localState);
     }
 
+    scheduleInlineAccessoryImageMigration(remoteState);
     return remoteState;
   } catch (error) {
     console.info("Word Adventure dataStore cloud fallback:", error?.message || error);
