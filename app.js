@@ -8,6 +8,7 @@
   quizCategoryId: null,
   parentUnlocked: false
 };
+const LOCAL_ACTIVE_CHILD_KEY = "wordAdventureActiveChild.v1";
 
 const wordDataCache = {
   version: 0,
@@ -1396,7 +1397,7 @@ function loadProgress() {
     });
 
     base.garden = normalizeGardenProgress(parsed.garden || base.garden);
-    base.activeChildId = PROFILES.some((child) => child.id === parsed.activeChildId) ? parsed.activeChildId : "jim";
+    base.activeChildId = localActiveChildId(state.activeChildId);
     migrateLegacyCustomWords(base);
     migrateSharedAccessoryLibrary(base);
     state.activeChildId = base.activeChildId;
@@ -1418,6 +1419,26 @@ function saveProgress(options = {}) {
   } catch (error) {
     console.error("Word Adventure save blocked:", error);
     return false;
+  }
+}
+
+function localActiveChildId(fallback = "jim") {
+  let stored = "";
+  try {
+    stored = localStorage.getItem(LOCAL_ACTIVE_CHILD_KEY) || "";
+  } catch {
+    stored = "";
+  }
+  if (PROFILES.some((child) => child.id === stored)) return stored;
+  return PROFILES.some((child) => child.id === fallback) ? fallback : "jim";
+}
+
+function saveLocalActiveChildId(childId) {
+  if (!PROFILES.some((child) => child.id === childId)) return;
+  try {
+    localStorage.setItem(LOCAL_ACTIVE_CHILD_KEY, childId);
+  } catch {
+    // In-memory state still works when localStorage is unavailable.
   }
 }
 
@@ -2367,6 +2388,7 @@ function renderProfileSwitch() {
     const button = event.target.closest("[data-profile]");
     if (!button) return;
     state.activeChildId = button.dataset.profile;
+    saveLocalActiveChildId(state.activeChildId);
     state.quizMode = null;
     state.quizCategoryId = null;
     saveProgress();

@@ -295,6 +295,55 @@ function protectStateBeforeSave(nextState, previousState = memoryState || readJs
   return true;
 }
 
+function mergeStateForCloudPush(localState, remoteState) {
+  if (!remoteState || typeof remoteState !== "object") return localState;
+  const local = ensureStateShape(cloneState(localState));
+  const remote = ensureStateShape(cloneState(remoteState));
+  const activeChildId = REQUIRED_CHILD_IDS.includes(local.activeChildId) ? local.activeChildId : null;
+  const mergedChildren = { ...(remote.children || {}) };
+
+  if (activeChildId && local.children?.[activeChildId]) {
+    mergedChildren[activeChildId] = local.children[activeChildId];
+  } else {
+    REQUIRED_CHILD_IDS.forEach((childId) => {
+      if (local.children?.[childId] && !remote.children?.[childId]) mergedChildren[childId] = local.children[childId];
+    });
+  }
+
+  return ensureStateShape({
+    ...remote,
+    ...local,
+    activeChildId: remote.activeChildId || local.activeChildId,
+    children: mergedChildren,
+    garden: mergeGardenForCloudPush(local.garden, remote.garden, activeChildId),
+    accessoryLibrary: chooseAccessoryLibraryForCloudPush(local.accessoryLibrary, remote.accessoryLibrary),
+    customWords: Array.isArray(local.customWords) && local.customWords.length ? local.customWords : remote.customWords,
+    settings: { ...(remote.settings || {}), ...(local.settings || {}) }
+  });
+}
+
+function chooseAccessoryLibraryForCloudPush(localLibrary, remoteLibrary) {
+  const localCount = Array.isArray(localLibrary?.customAccessories) ? localLibrary.customAccessories.length : 0;
+  const remoteCount = Array.isArray(remoteLibrary?.customAccessories) ? remoteLibrary.customAccessories.length : 0;
+  if (remoteCount > localCount) return remoteLibrary;
+  return localLibrary || remoteLibrary;
+}
+
+function mergeGardenForCloudPush(localGarden, remoteGarden, activeChildId) {
+  const local = localGarden && typeof localGarden === "object" ? localGarden : {};
+  const remote = remoteGarden && typeof remoteGarden === "object" ? remoteGarden : {};
+  return {
+    ...remote,
+    ...local,
+    sharedGardenPoints: Math.max(Number(remote.sharedGardenPoints) || 0, Number(local.sharedGardenPoints) || 0),
+    sharedGardenLevel: Math.max(Number(remote.sharedGardenLevel) || 1, Number(local.sharedGardenLevel) || 1),
+    childGarden: {
+      ...(remote.childGarden || {}),
+      ...(activeChildId && local.childGarden?.[activeChildId] ? { [activeChildId]: local.childGarden[activeChildId] } : {})
+    }
+  };
+}
+
 function backupFileName(date = new Date()) {
   const pad = (value) => String(value).padStart(2, "0");
   return `word-adventure-backup-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}.json`;
@@ -420,15 +469,16 @@ async function syncToCloud(state = getMutableState()) {
     const progressRef = await getProgressDocRef();
     const existingSnapshot = await firestore.getDoc(progressRef);
     const existingRemoteState = existingSnapshot.exists() ? fromCloudAppState(existingSnapshot.data()) : null;
-    if (existingRemoteState && !protectStateBeforeSave(state, existingRemoteState, { silent: true })) {
+    const stateForCloud = existingRemoteState ? mergeStateForCloudPush(state, existingRemoteState) : state;
+    if (existingRemoteState && !protectStateBeforeSave(stateForCloud, existingRemoteState, { silent: true })) {
       applyRemoteState(existingRemoteState);
       return existingRemoteState;
     }
-    if (!existingRemoteState && !hasMeaningfulStateData(state)) {
+    if (!existingRemoteState && !hasMeaningfulStateData(stateForCloud)) {
       showProtectionWarning();
       throw new Error(DATA_PROTECTION_MESSAGE);
     }
-    const cloudAppState = toCloudAppState(state, firestore);
+    const cloudAppState = toCloudAppState(stateForCloud, firestore);
     await firestore.setDoc(progressRef, cloudAppState, { merge: true });
     const next = fromCloudAppState(cloudAppState);
     lastCloudPushedJson = JSON.stringify(next);
