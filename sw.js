@@ -1,4 +1,4 @@
-const CACHE_NAME = "word-adventure-v20260620-no-protection-alert-v1";
+const CACHE_NAME = "word-adventure-v20260620-custom-stage-display-v1";
 const APP_SHELL = [
   "./",
   "./index.html",

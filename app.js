@@ -1904,8 +1904,10 @@ function mergedWordData(level) {
       }))
   }));
 
+  const customStages = new Map();
   (currentProgress().customWords || []).filter((word) => wordAllowedForChild(word, childId)).forEach((word) => {
-    const group = displayGroupForCategory(word.appCategory || word.category || word.categoryZh || "useful_words");
+    const stageId = word.stageId || `${word.appCategory || normalizeAppCategoryId(word.category || word.categoryZh || "custom")}_${word.difficulty || "easy"}`;
+    const group = customDisplayGroupForWord(word);
     const normalizedWord = enrichWordForDisplay({
       ...word,
       id: word.id || `custom_${Date.now()}`,
@@ -1913,23 +1915,53 @@ function mergedWordData(level) {
       word: word.word || word.en,
       appCategory: group.id,
       categoryZh: group.zh,
-      sourceCategory: word.sourceCategory || word.appCategory || "custom",
+      stageId,
+      categoryId: stageId,
+      sourceCategory: word.sourceCategory || word.category || word.appCategory || "custom",
       emoji: resolveWordEmoji(word)
     });
-    sourceCategories.push({
-      id: `custom_source_${normalizedWord.id}`,
-      baseCategoryId: group.id,
-      appCategory: group.id,
-      zh: group.zh,
-      categoryZh: group.zh,
-      en: group.id,
-      icon: group.icon,
-      color: group.color,
-      words: [normalizedWord]
-    });
+    if (!customStages.has(stageId)) {
+      customStages.set(stageId, createCustomStage(group, stageId, normalizedWord.difficulty || word.difficulty || "easy"));
+    }
+    customStages.get(stageId).words.push(normalizedWord);
   });
 
-  return normalizeStageBank(sourceCategories).filter((category) => category.words.length >= 10);
+  return [
+    ...normalizeStageBank(sourceCategories).filter((category) => category.words.length >= 10),
+    ...[...customStages.values()].filter((category) => category.words.length > 0)
+  ];
+}
+
+function customDisplayGroupForWord(word) {
+  const appCategory = word.appCategory || normalizeAppCategoryId(word.category || word.categoryZh || "custom");
+  const knownGroup = displayGroupForCategory(appCategory);
+  if (knownGroup.id !== "useful_words" || ["useful_words", "daily_phrases"].includes(appCategory)) return knownGroup;
+  const label = word.category || word.categoryZh || word.sourceCategory || appCategory;
+  return {
+    id: appCategory,
+    zh: label,
+    icon: word.emoji || categoryFallbackEmoji(appCategory),
+    color: categoryColor(appCategory)
+  };
+}
+
+function createCustomStage(group, stageId, difficulty = "easy") {
+  return {
+    id: stageId,
+    baseCategoryId: group.id,
+    appCategory: group.id,
+    difficulty,
+    difficultyZh: difficultyLabel(difficulty),
+    title: `${group.zh}\u30fb${difficultyLabel(difficulty)}`,
+    zh: group.zh,
+    categoryZh: group.zh,
+    en: stageId,
+    icon: group.icon,
+    color: group.color,
+    unlockRequirement: "",
+    diamondReward: 1,
+    words: []
+  };
 }
 
 function normalizeStageBank(sourceCategories) {
