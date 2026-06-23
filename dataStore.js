@@ -389,6 +389,33 @@ function mergeGardenForCloudPush(localGarden, remoteGarden, activeChildId) {
   };
 }
 
+function countArray(value) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function childProgressAhead(localChild, remoteChild) {
+  if (!localChild || typeof localChild !== "object") return false;
+  if (!remoteChild || typeof remoteChild !== "object") return hasMeaningfulStateData({ children: { child: localChild } });
+  const progressFields = [
+    "learnedWordIds",
+    "masteredWordIds",
+    "completedStageIds",
+    "claimedStageRewardIds",
+    "quizHistory",
+    "quizResults"
+  ];
+  if (progressFields.some((field) => countArray(localChild[field]) > countArray(remoteChild[field]))) return true;
+  const localDiamondProgress = countArray(localChild.claimedStageRewardIds) > countArray(remoteChild.claimedStageRewardIds);
+  if (localDiamondProgress && (Number(localChild.diamonds) || 0) > (Number(remoteChild.diamonds) || 0)) return true;
+  return false;
+}
+
+function hasLocalProgressAhead(localState, remoteState) {
+  const local = ensureStateShape(cloneState(localState));
+  const remote = ensureStateShape(cloneState(remoteState));
+  return REQUIRED_CHILD_IDS.some((childId) => childProgressAhead(local.children?.[childId], remote.children?.[childId]));
+}
+
 function backupFileName(date = new Date()) {
   const pad = (value) => String(value).padStart(2, "0");
   return `word-adventure-backup-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}.json`;
@@ -664,6 +691,16 @@ async function startCloudListener() {
       const localState = getMutableState();
       const remoteUpdatedAt = timestampMs(remoteState.updatedAt);
       const localUpdatedAt = timestampMs(localState.updatedAt);
+      if (hasLocalProgressAhead(localState, remoteState)) {
+        try {
+          await syncToCloud(localState);
+        } catch (error) {
+          console.warn("Word Adventure cloud push postponed for local progress:", error?.message || error);
+          cloudStatus = { ...cloudStatus, syncMode: "cloud", online: false, syncing: false, error: error?.message || String(error) };
+          notifyStateChange(getMutableState(), { source: "cloud-error" });
+        }
+        return;
+      }
       if (hasMeaningfulStateData(remoteState) && isDangerousStateLoss(remoteState, localState)) {
         try {
           applyRemoteState(remoteState);
@@ -743,6 +780,15 @@ async function init() {
       applyRemoteState(remoteState);
       scheduleInlineAccessoryImageMigration(remoteState);
       return remoteState;
+    }
+
+    if (hasLocalProgressAhead(localState, remoteState)) {
+      try {
+        return await syncToCloud(localState);
+      } catch (error) {
+        console.warn("Word Adventure cloud push postponed for local progress during init:", error?.message || error);
+        return localState;
+      }
     }
 
     if (timestampMs(localState.updatedAt) > timestampMs(remoteState.updatedAt)) {
