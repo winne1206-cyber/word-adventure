@@ -112,6 +112,33 @@ function compactAccessoryImagesForLocalStorage(state) {
   return next;
 }
 
+function compactAccessoryImagesForCloud(state) {
+  const next = cloneState(state);
+  const compactList = (items) => {
+    if (!Array.isArray(items)) return items;
+    return items.map((item) => {
+      if (!item || typeof item !== "object") return item;
+      const compact = { ...item };
+      delete compact.wearImage;
+      delete compact.image;
+      delete compact.iconImage;
+      if (isDataUrl(compact.iconSrc)) delete compact.iconSrc;
+      return compact;
+    });
+  };
+
+  const library = next?.accessoryLibrary;
+  if (library?.customAccessories) {
+    library.customAccessories = compactList(library.customAccessories);
+  }
+  if (next?.children && typeof next.children === "object") {
+    Object.values(next.children).forEach((child) => {
+      if (child?.customAccessories) child.customAccessories = compactList(child.customAccessories);
+    });
+  }
+  return next;
+}
+
 function cloneState(value) {
   if (!value || typeof value !== "object") return value;
   try {
@@ -584,7 +611,7 @@ async function syncToCloud(state = getMutableState()) {
       showProtectionWarning();
       throw new Error(DATA_PROTECTION_MESSAGE);
     }
-    stateForCloud = await moveInlineAccessoryImagesToStorage(stateForCloud);
+    stateForCloud = compactAccessoryImagesForCloud(stateForCloud);
     const cloudAppState = toCloudAppState(stateForCloud, firestore);
     await firestore.setDoc(progressRef, cloudAppState, { merge: true });
     const next = fromCloudAppState(cloudAppState);
