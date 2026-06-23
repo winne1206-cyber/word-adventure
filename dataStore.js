@@ -514,7 +514,10 @@ function scheduleInlineAccessoryImageMigration(state) {
   if (!hasInlineAccessoryImages(state)) return;
   window.setTimeout(async () => {
     try {
-      await syncToCloud(state);
+      await Promise.race([
+        syncToCloud(state),
+        new Promise((_, reject) => window.setTimeout(() => reject(new Error("Accessory image migration timed out")), 15000))
+      ]);
     } catch (error) {
       console.warn("Word Adventure accessory image migration postponed:", error?.message || error);
       cloudStatus = {

@@ -10,6 +10,7 @@ word-adventure-backup-*.json
 word-adventure-firestore-raw-backup-*.json
 word-adventure-*.json
 restore-local.html
+restore-cloud.html
 dist/
 build/
 .cache/
