@@ -56,11 +56,12 @@ function gardenLevelFromPoints(points) {
 }
 
 function readJson(key, fallback = null) {
-  const saved = localStorage.getItem(key);
-  if (!saved) return fallback;
   try {
+    const saved = localStorage.getItem(key);
+    if (!saved) return fallback;
     return JSON.parse(saved);
-  } catch {
+  } catch (error) {
+    console.warn("Word Adventure localStorage read fallback:", error);
     return fallback;
   }
 }

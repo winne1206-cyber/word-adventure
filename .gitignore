@@ -8,6 +8,8 @@ Thumbs.db
 .env
 word-adventure-backup-*.json
 word-adventure-firestore-raw-backup-*.json
+word-adventure-*.json
+restore-local.html
 dist/
 build/
 .cache/

@@ -1188,8 +1188,8 @@ const LEGACY_ACCESSORY_ID_MAP = {
 
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAPAAAP///wAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==";
 const ASSET_VERSION = "word-assets-20260618-custom-accessories";
-const FIREBASE_STORAGE_VERSION = "12.15.0";
-const FIREBASE_STORAGE_URL = `https://www.gstatic.com/firebasejs/${FIREBASE_STORAGE_VERSION}/firebase-storage.js`;
+const APP_FIREBASE_STORAGE_VERSION = "12.15.0";
+const APP_FIREBASE_STORAGE_URL = `https://www.gstatic.com/firebasejs/${APP_FIREBASE_STORAGE_VERSION}/firebase-storage.js`;
 const ACCESSORY_UPLOAD_TIMEOUT_MS = 45000;
 const ACCESSORY_INLINE_IMAGE_LIMIT = 420000;
 const ACCESSORY_INLINE_FILE_SIZE_LIMIT = 160 * 1024;
@@ -1412,7 +1412,8 @@ function loadProgress() {
     migrateSharedAccessoryLibrary(base);
     state.activeChildId = base.activeChildId;
     return base;
-  } catch {
+  } catch (error) {
+    console.error("Word Adventure loadProgress fallback:", error);
     const fresh = defaultProgress();
     migrateLegacyCustomWords(fresh);
     return fresh;
@@ -3403,7 +3404,7 @@ async function uploadAccessoryImageToStorage(file, itemId, role, maxEdge, onStat
   const roleLabel = role === "icon" ? "顯示圖" : "佩戴圖";
   onStatus?.(`正在壓縮${roleLabel}...`);
   const firebase = await import("./firebase.js");
-  const storage = await import(FIREBASE_STORAGE_URL);
+  const storage = await import(APP_FIREBASE_STORAGE_URL);
   const { user } = await firebase.initFirebase();
   const imageBlob = await imageFileToBlob(file, maxEdge);
   const extension = imageBlob.type === "image/png" ? "png" : "webp";
