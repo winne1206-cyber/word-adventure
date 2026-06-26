@@ -178,6 +178,54 @@ const DISPLAY_CATEGORY_LOOKUP = Object.entries(DISPLAY_CATEGORY_GROUPS).reduce((
   return lookup;
 }, {});
 
+function splitStageId(stageId) {
+  const match = String(stageId || "").match(/^(.+)_(easy|medium|hard|stage_\d+)$/);
+  if (!match) return null;
+  return { categoryId: match[1], stageKey: match[2] };
+}
+
+function canonicalStageId(stageId) {
+  const parts = splitStageId(stageId);
+  if (!parts) return String(stageId || "");
+  const normalizedCategory = parts.categoryId.toLowerCase();
+  const groupId = DISPLAY_CATEGORY_GROUPS[parts.categoryId]
+    ? parts.categoryId
+    : DISPLAY_CATEGORY_LOOKUP[normalizedCategory] || parts.categoryId;
+  return DISPLAY_CATEGORY_GROUPS[groupId] ? `${groupId}_${parts.stageKey}` : String(stageId || "");
+}
+
+function equivalentStageIds(stageId) {
+  const ids = new Set();
+  const original = String(stageId || "");
+  if (!original) return ids;
+  ids.add(original);
+  const canonical = canonicalStageId(original);
+  ids.add(canonical);
+  const parts = splitStageId(canonical);
+  if (!parts) return ids;
+  const group = DISPLAY_CATEGORY_GROUPS[parts.categoryId];
+  if (group) {
+    group.categories.forEach((categoryId) => ids.add(`${categoryId}_${parts.stageKey}`));
+  }
+  return ids;
+}
+
+function hasEquivalentStageId(stageIds, stageId) {
+  const aliases = equivalentStageIds(stageId);
+  return (stageIds || []).some((id) => aliases.has(String(id)));
+}
+
+function pushCanonicalStageId(stageIds, stageId) {
+  const list = Array.isArray(stageIds) ? [...stageIds] : [];
+  if (hasEquivalentStageId(list, stageId)) return list;
+  list.push(canonicalStageId(stageId));
+  return list;
+}
+
+function uniqueStageProgressCount(stageIds) {
+  return new Set((stageIds || []).map(canonicalStageId).filter(Boolean)).size;
+}
+
 const WORD_EMOJI_OVERRIDES = {
   "animals:animal": "\u{1F43E}",
   "animals:bear": "\u{1F43B}",
@@ -2846,13 +2894,13 @@ function renderHome() {
 
   activeWordData().forEach((category) => {
     const learnedIds = new Set(currentProgress().learnedWordIds || []);
-    const claimedIds = new Set(currentProgress().claimedStageRewardIds || []);
+    const claimedIds = currentProgress().claimedStageRewardIds || [];
     const learnedCountForCategory = category.words.filter((word) => learnedIds.has(getWordId(word, category.id))).length;
     const masteredCountForCategory = category.words.filter((word) => isWordMasteredForCurrentProfile(getWordId(word, category.id))).length;
     const total = category.words.length;
     const isUnlocked = isStageUnlocked(category);
-    const canClaim = isUnlocked && total > 0 && learnedCountForCategory === total && masteredCountForCategory === total && !claimedIds.has(category.id);
-    const isDone = claimedIds.has(category.id);
+    const isDone = hasEquivalentStageId(claimedIds, category.id);
+    const canClaim = isUnlocked && total > 0 && learnedCountForCategory === total && masteredCountForCategory === total && !isDone;
     const status = !isUnlocked ? "\u672a\u89e3\u9396" : isDone ? "\u5df2\u5b8c\u6210" : canClaim ? "\u53ef\u9818\u947d\u77f3" : learnedCountForCategory === 0 ? "\u53ef\u6311\u6230" : "\u5b78\u7fd2\u4e2d";
     const label = $(`#cat-${category.id}`);
     const masteredLabel = $(`#cat-mastered-${category.id}`);
@@ -2901,7 +2949,7 @@ function renderHomeRewardSummary() {
     <div><strong>${profile.displayName}</strong><small>${profile.roleName}\u30fb${profile.levelName}</small></div>
     <div><span>\u2b50</span><strong>${current.stars}</strong></div>
     <div><span>\ud83d\udc8e</span><strong>${current.diamonds}</strong></div>
-    <div><small>\u5b8c\u6210\u95dc\u5361</small><strong>${(current.claimedStageRewardIds || []).length}</strong></div>
+    <div><small>\u5b8c\u6210\u95dc\u5361</small><strong>${uniqueStageProgressCount(current.claimedStageRewardIds || [])}</strong></div>
     <div><small>\u5f85\u514c\u63db</small><strong>${pendingCoupons}</strong></div>
   `;
 }
@@ -4331,23 +4379,23 @@ function renderQuizResults() {
 
 function updateCompletedStages(categoryId) {
   const profile = currentProgress();
-  const category = activeWordData().find((item) => item.id === categoryId);
+  const category = activeWordData().find((item) => hasEquivalentStageId([item.id], categoryId));
   if (!category) return;
 
   const isComplete = isCategoryMastered(category);
 
   profile.completedStageIds = profile.completedStageIds || [];
-  if (isComplete && !profile.completedStageIds.includes(categoryId)) {
-    profile.completedStageIds.push(categoryId);
+  if (isComplete) {
+    profile.completedStageIds = pushCanonicalStageId(profile.completedStageIds, category.id);
   }
 }
 
 function isStageRequirementMet(stageId) {
   if (!stageId) return true;
   const profile = currentProgress();
-  if ((profile.completedStageIds || []).includes(stageId)) return true;
-  if ((profile.claimedStageRewardIds || []).includes(stageId)) return true;
-  const requiredStage = activeWordData().find((item) => item.id === stageId);
+  if (hasEquivalentStageId(profile.completedStageIds || [], stageId)) return true;
+  if (hasEquivalentStageId(profile.claimedStageRewardIds || [], stageId)) return true;
+  const requiredStage = activeWordData().find((item) => hasEquivalentStageId([item.id], stageId));
   return requiredStage ? isCategoryMastered(requiredStage) : false;
 }
 
@@ -4367,20 +4415,20 @@ function isCategoryMastered(category) {
 function claimStageReward(categoryId) {
   const profile = currentProgress();
   const childId = state.activeChildId;
-  const category = activeWordData().find((item) => item.id === categoryId);
+  const category = activeWordData().find((item) => hasEquivalentStageId([item.id], categoryId));
   if (!category || !isCategoryMastered(category)) return;
 
   profile.claimedStageRewardIds = profile.claimedStageRewardIds || [];
-  if (profile.claimedStageRewardIds.includes(categoryId)) return;
+  if (hasEquivalentStageId(profile.claimedStageRewardIds, category.id)) return;
 
   const rewardDiamonds = Number(category.diamondReward) || 1;
   profile.diamonds = (profile.diamonds || 0) + rewardDiamonds;
-  profile.claimedStageRewardIds.push(categoryId);
+  profile.claimedStageRewardIds = pushCanonicalStageId(profile.claimedStageRewardIds, category.id);
   profile.completedStageIds = profile.completedStageIds || [];
-  if (!profile.completedStageIds.includes(categoryId)) profile.completedStageIds.push(categoryId);
+  profile.completedStageIds = pushCanonicalStageId(profile.completedStageIds, category.id);
   profile.completed = profile.completed || [];
-  if (!profile.completed.includes(categoryId)) profile.completed.push(categoryId);
-  window.dataStore.claimStageReward(childId, categoryId);
+  profile.completed = pushCanonicalStageId(profile.completed, category.id);
+  window.dataStore.claimStageReward(childId, category.id);
   addGardenPoints(childId, 10);
 
   saveProgress();

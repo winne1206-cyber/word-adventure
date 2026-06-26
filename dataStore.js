@@ -37,6 +37,65 @@ const IMPORTANT_CHILD_ARRAYS = [
 ];
 const REQUIRED_CHILD_IDS = ["jim", "ethan", "ai"];
 
+const STAGE_ALIAS_GROUPS = {
+  adventure_animals: ["animals", "nature"],
+  daily_food_home: ["foods", "tableware", "home"],
+  people_body: ["body", "family", "people", "titles", "jobs", "health"],
+  school_words: ["school"],
+  numbers_time: ["numbers", "time", "money"],
+  colors_sizes: ["colors", "sizeMeasurement"],
+  places_play: ["hobbies", "clothes", "transportation", "places", "geography", "holidays"],
+  useful_words: ["others", "prepositions", "auxiliaries", "conjunctions", "interjections", "traits", "determiners", "pronouns", "questionWords"]
+};
+
+const STAGE_ALIAS_LOOKUP = Object.entries(STAGE_ALIAS_GROUPS).reduce((lookup, [groupId, categories]) => {
+  categories.forEach((categoryId) => {
+    lookup[categoryId.toLowerCase()] = groupId;
+  });
+  return lookup;
+}, {});
+
+function splitStageId(stageId) {
+  const match = String(stageId || "").match(/^(.+)_(easy|medium|hard|stage_\d+)$/);
+  if (!match) return null;
+  return { categoryId: match[1], stageKey: match[2] };
+}
+
+function canonicalStageId(stageId) {
+  const parts = splitStageId(stageId);
+  if (!parts) return String(stageId || "");
+  const groupId = STAGE_ALIAS_GROUPS[parts.categoryId]
+    ? parts.categoryId
+    : STAGE_ALIAS_LOOKUP[parts.categoryId.toLowerCase()] || parts.categoryId;
+  return STAGE_ALIAS_GROUPS[groupId] ? `${groupId}_${parts.stageKey}` : String(stageId || "");
+}
+
+function equivalentStageIds(stageId) {
+  const ids = new Set();
+  const original = String(stageId || "");
+  if (!original) return ids;
+  ids.add(original);
+  const canonical = canonicalStageId(original);
+  ids.add(canonical);
+  const parts = splitStageId(canonical);
+  if (parts && STAGE_ALIAS_GROUPS[parts.categoryId]) {
+    STAGE_ALIAS_GROUPS[parts.categoryId].forEach((categoryId) => ids.add(`${categoryId}_${parts.stageKey}`));
+  }
+  return ids;
+}
+
+function hasEquivalentStageId(stageIds, stageId) {
+  const aliases = equivalentStageIds(stageId);
+  return (stageIds || []).some((id) => aliases.has(String(id)));
+}
+
+function pushCanonicalStageId(stageIds, stageId) {
+  const list = Array.isArray(stageIds) ? [...stageIds] : [];
+  if (hasEquivalentStageId(list, stageId)) return list;
+  list.push(canonicalStageId(stageId));
+  return list;
+}
+
 const GARDEN_LEVEL_RULES = [
   { level: 1, points: 0 },
   { level: 2, points: 20 },
@@ -868,9 +927,9 @@ function addWrongWord(childId, wordId) {
 function claimStageReward(childId, stageId) {
   const state = getMutableState();
   const child = getChild(state, childId);
-  const alreadyClaimed = (child.claimedStageRewardIds || []).includes(stageId);
-  child.claimedStageRewardIds = uniquePush(child.claimedStageRewardIds, stageId);
-  child.completedStageIds = uniquePush(child.completedStageIds, stageId);
+  const alreadyClaimed = hasEquivalentStageId(child.claimedStageRewardIds || [], stageId);
+  child.claimedStageRewardIds = pushCanonicalStageId(child.claimedStageRewardIds, stageId);
+  child.completedStageIds = pushCanonicalStageId(child.completedStageIds, stageId);
   if (!alreadyClaimed) child.diamonds = (Number(child.diamonds) || 0) + 1;
   saveState(state);
   return child;
