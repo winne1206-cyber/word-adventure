@@ -399,6 +399,61 @@ function protectStateBeforeSave(nextState, previousState = memoryState || readJs
   return true;
 }
 
+function itemMergeKey(item) {
+  if (item && typeof item === "object") {
+    return item.id || item.wordId || item.code || item.name || JSON.stringify(item);
+  }
+  return String(item);
+}
+
+function richerItem(a, b) {
+  if (a == null) return cloneState(b);
+  if (b == null) return cloneState(a);
+  if (typeof a !== "object" || typeof b !== "object") {
+    return String(b).length > String(a).length ? cloneState(b) : cloneState(a);
+  }
+  return JSON.stringify(b).length > JSON.stringify(a).length ? cloneState(b) : cloneState(a);
+}
+
+function unionArrayByKey(a, b) {
+  const map = new Map();
+  [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])].forEach((item) => {
+    const key = itemMergeKey(item);
+    map.set(key, map.has(key) ? richerItem(map.get(key), item) : cloneState(item));
+  });
+  return [...map.values()];
+}
+
+function unionStageArray(a, b) {
+  const list = unionArrayByKey(a, b);
+  const seen = new Set();
+  return list.reduce((next, id) => {
+    const canonical = canonicalStageId(id);
+    if (!canonical || seen.has(canonical)) return next;
+    seen.add(canonical);
+    next.push(canonical);
+    return next;
+  }, []);
+}
+
+function mergeChildForCloudPush(localChild = {}, remoteChild = {}) {
+  const merged = { ...remoteChild, ...localChild };
+  IMPORTANT_CHILD_ARRAYS.forEach((field) => {
+    merged[field] = unionArrayByKey(remoteChild[field], localChild[field]);
+  });
+  ["quizHistory", "quizResults", "ownedItems", "unlocked", "learned"].forEach((field) => {
+    if (Array.isArray(remoteChild[field]) || Array.isArray(localChild[field])) {
+      merged[field] = unionArrayByKey(remoteChild[field], localChild[field]);
+    }
+  });
+  merged.completedStageIds = unionStageArray(remoteChild.completedStageIds, localChild.completedStageIds);
+  merged.claimedStageRewardIds = unionStageArray(remoteChild.claimedStageRewardIds, localChild.claimedStageRewardIds);
+  merged.completed = unionStageArray(remoteChild.completed, localChild.completed);
+  merged.stars = Math.max(Number(remoteChild.stars) || 0, Number(localChild.stars) || 0);
+  merged.diamonds = Math.max(Number(remoteChild.diamonds) || 0, Number(localChild.diamonds) || 0);
+  return merged;
+}
+
 function mergeStateForCloudPush(localState, remoteState) {
   if (!remoteState || typeof remoteState !== "object") return localState;
   const local = ensureStateShape(cloneState(localState));
@@ -406,13 +461,9 @@ function mergeStateForCloudPush(localState, remoteState) {
   const activeChildId = REQUIRED_CHILD_IDS.includes(local.activeChildId) ? local.activeChildId : null;
   const mergedChildren = { ...(remote.children || {}) };
 
-  if (activeChildId && local.children?.[activeChildId]) {
-    mergedChildren[activeChildId] = local.children[activeChildId];
-  } else {
-    REQUIRED_CHILD_IDS.forEach((childId) => {
-      if (local.children?.[childId] && !remote.children?.[childId]) mergedChildren[childId] = local.children[childId];
-    });
-  }
+  REQUIRED_CHILD_IDS.forEach((childId) => {
+    mergedChildren[childId] = mergeChildForCloudPush(local.children?.[childId] || {}, remote.children?.[childId] || {});
+  });
 
   return ensureStateShape({
     ...remote,
@@ -421,16 +472,24 @@ function mergeStateForCloudPush(localState, remoteState) {
     children: mergedChildren,
     garden: mergeGardenForCloudPush(local.garden, remote.garden, activeChildId),
     accessoryLibrary: chooseAccessoryLibraryForCloudPush(local.accessoryLibrary, remote.accessoryLibrary),
-    customWords: Array.isArray(local.customWords) && local.customWords.length ? local.customWords : remote.customWords,
+    customWords: unionArrayByKey(remote.customWords, local.customWords),
     settings: { ...(remote.settings || {}), ...(local.settings || {}) }
   });
 }
 
 function chooseAccessoryLibraryForCloudPush(localLibrary, remoteLibrary) {
-  const localCount = Array.isArray(localLibrary?.customAccessories) ? localLibrary.customAccessories.length : 0;
-  const remoteCount = Array.isArray(remoteLibrary?.customAccessories) ? remoteLibrary.customAccessories.length : 0;
-  if (remoteCount > localCount) return remoteLibrary;
-  return localLibrary || remoteLibrary;
+  const local = localLibrary || {};
+  const remote = remoteLibrary || {};
+  return {
+    ...remote,
+    ...local,
+    customAccessories: unionArrayByKey(remote.customAccessories, local.customAccessories),
+    hiddenAccessoryIds: unionArrayByKey(remote.hiddenAccessoryIds, local.hiddenAccessoryIds),
+    accessoryPositionOverrides: {
+      ...(remote.accessoryPositionOverrides || {}),
+      ...(local.accessoryPositionOverrides || {})
+    }
+  };
 }
 
 function mergeGardenForCloudPush(localGarden, remoteGarden, activeChildId) {
