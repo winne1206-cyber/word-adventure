@@ -278,7 +278,7 @@ function withUpdatedAt(state, updatedAt = new Date().toISOString()) {
 
 function toCloudAppState(state, firestore) {
   const next = ensureStateShape({ ...state, syncMode: "cloud" });
-  const updatedAt = next.updatedAt || new Date().toISOString();
+  const updatedAt = new Date().toISOString();
   return {
     ...next,
     customWords: Array.isArray(next.customWords) ? next.customWords : [],
