@@ -1425,9 +1425,11 @@ async function startCloudSync() {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch((error) => {
-      console.info("Word Adventure service worker fallback:", error?.message || error);
-    });
+    navigator.serviceWorker.register("./sw.js?v=20260627-safe-garden-merge-v1")
+      .then((registration) => registration.update?.())
+      .catch((error) => {
+        console.info("Word Adventure service worker fallback:", error?.message || error);
+      });
   });
 }
 
