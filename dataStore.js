@@ -495,15 +495,24 @@ function chooseAccessoryLibraryForCloudPush(localLibrary, remoteLibrary) {
 function mergeGardenForCloudPush(localGarden, remoteGarden, activeChildId) {
   const local = localGarden && typeof localGarden === "object" ? localGarden : {};
   const remote = remoteGarden && typeof remoteGarden === "object" ? remoteGarden : {};
+  const childGarden = { ...(remote.childGarden || {}) };
+  REQUIRED_CHILD_IDS.forEach((childId) => {
+    const remoteChildGarden = remote.childGarden?.[childId] || {};
+    const localChildGarden = local.childGarden?.[childId] || {};
+    childGarden[childId] = {
+      ...remoteChildGarden,
+      ...localChildGarden,
+      gardenPoints: Math.max(Number(remoteChildGarden.gardenPoints) || 0, Number(localChildGarden.gardenPoints) || 0),
+      gardenLevel: Math.max(Number(remoteChildGarden.gardenLevel) || 1, Number(localChildGarden.gardenLevel) || 1),
+      unlockedGardenItems: unionArrayByKey(remoteChildGarden.unlockedGardenItems, localChildGarden.unlockedGardenItems)
+    };
+  });
   return {
     ...remote,
     ...local,
     sharedGardenPoints: Math.max(Number(remote.sharedGardenPoints) || 0, Number(local.sharedGardenPoints) || 0),
     sharedGardenLevel: Math.max(Number(remote.sharedGardenLevel) || 1, Number(local.sharedGardenLevel) || 1),
-    childGarden: {
-      ...(remote.childGarden || {}),
-      ...(activeChildId && local.childGarden?.[activeChildId] ? { [activeChildId]: local.childGarden[activeChildId] } : {})
-    }
+    childGarden
   };
 }
 
